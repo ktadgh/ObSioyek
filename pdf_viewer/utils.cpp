@@ -1614,6 +1614,10 @@ QCommandLineParser* get_command_line_parser() {
 	QCommandLineOption shared_database_path_option("shared-database-path", "Specify which file to use for shared data (bookmarks, highlights, etc.)", "path");
 	parser->addOption(shared_database_path_option);
 
+	QCommandLineOption extract_references_option("extract-references","Extract PDF references using Grobid and exit??");
+
+    parser->addOption(extractRefsOption);
+
     parser->addHelpOption();
 
 	return parser;
