@@ -3,7 +3,12 @@ TARGET = sioyek
 VERSION = 2.0.0
 
 INCLUDEPATH += ./pdf_viewer \
-               mupdf/include
+               mupdf/include \
+               ./cpp-httplib \ 
+               ./tinyxml2 \
+               ./json/include
+
+
 
 !android{
     INCLUDEPATH += zlib

@@ -21,6 +21,11 @@
 #include "ui.h"
 #include "document.h"
 #include "document_view.h"
+#include "grobid_utils.h"
+
+#include <httplib.h>
+#include <tinyxml2.h>
+#include <nlohmann/json.hpp>
 
 extern bool SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE;
 extern bool USE_LEGACY_KEYBINDS;
@@ -1374,15 +1379,7 @@ public:
     }
 };
 
-#pragma once
-#include "Command.h"
-#include "MainWidget.h"
-#include <fstream>
-#include <filesystem>
-#include <iostream>
-#include <sstream>
-#include <vector>
-#include <string>
+
 
 namespace fs = std::filesystem;
 
@@ -1402,7 +1399,7 @@ public:
         DocumentViewState state = dv->get_state();
         if (state.document_path.empty()) return;
 
-        parse_and_store_references(state.document_path);
+        parse_and_store_references(QString::fromStdWString(state.document_path).toStdString());
     }
 
 private:
@@ -1470,14 +1467,14 @@ private:
 
         std::string pdf_data = read_file_binary(pdf_path);
 
-        httplib::MultipartFormDataItems items;
-        items.push_back({
-            "input",
-            pdf_data,
-            fs::path(pdf_path).filename().string(),
-            "application/pdf"
-        });
-
+        httplib::UploadFormDataItems items = {
+            {
+                "input",                                 // field name
+                pdf_data,                                // file content
+                fs::path(pdf_path).filename().string(),  // filename
+                "application/pdf"                        // content type
+            }
+        };
         httplib::Client cli("http://localhost:8070");
         cli.set_read_timeout(60, 0);
 
@@ -1495,13 +1492,14 @@ private:
         if (!ensure_grobid_running()) return "";
 
         std::string pdf_data = read_file_binary(pdf_path);
-        httplib::MultipartFormDataItems items;
-        items.push_back({
-            "input",
-            pdf_data,
-            fs::path(pdf_path).filename().string(),
-            "application/pdf"
-        });
+        httplib::UploadFormDataItems items = {
+            {
+                "input",                                 // field name
+                pdf_data,                                // file content
+                fs::path(pdf_path).filename().string(),  // filename
+                "application/pdf"                        // content type
+            }
+        };
 
         httplib::Client cli("http://localhost:8070");
         cli.set_read_timeout(30, 0);

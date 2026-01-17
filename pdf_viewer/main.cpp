@@ -6,7 +6,7 @@
 #include <optional>
 #include <utility>
 #include <filesystem>
-
+#include <grobid_utils.h>
 #ifdef SIOYEK_ANDROID
 #include <QtCore/private/qandroidextras_p.h>
 #endif

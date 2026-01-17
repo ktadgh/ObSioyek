@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <regex>
 #include <unordered_map>
+#include "grobid_utils.h"
 
 #include <httplib.h>
 #include <tinyxml2.h>
@@ -108,7 +109,6 @@ std::string query_crossref_for_doi(const std::string& title) {
     return "";
 }
 
-
 // getting doi from text
 std::string normalize_arxiv_from_text(const std::string& text) {
     std::regex re(R"(arXiv:(\d{4}\.\d{4,5}))");
@@ -169,18 +169,24 @@ void extract_pdf_references_with_grobid(const std::string& pdf_path) {
 
     std::string pdf_data = read_file_binary(pdf_path);
 
-    httplib::MultipartFormDataItems items;
-    items.push_back({
-        "input",
-        pdf_data,
-        fs::path(pdf_path).filename().string(),
-        "application/pdf"
-    });
-
     httplib::Client cli("http://localhost:8070");
     cli.set_read_timeout(60, 0);
 
-    auto res = cli.Post("/api/processReferences", items);
+
+    // create a vector of upload form data items
+    httplib::UploadFormDataItems items = {
+        {
+            "input",                                 // field name
+            pdf_data,                                // file content
+            fs::path(pdf_path).filename().string(),  // filename
+            "application/pdf"                        // content type
+        }
+    };
+
+    // post the multipart/form-data
+    auto res = cli.Post("/api/processReferences", httplib::Headers{}, items);
+
+
     if (!res || res->status != 200) {
         std::cerr << "Grobid failed\n";
         return;
@@ -194,8 +200,7 @@ void extract_pdf_references_with_grobid(const std::string& pdf_path) {
     for (auto& ref : refs) {
         std::string doi = normalize_arxiv_from_text(ref);
 
-        // Optional: online arXiv search if no ID in text
-        if (doi.empty() && looks_like_preprint(ref)) {
+        if (doi.empty()) {
             doi = query_arxiv_for_doi(ref);
         }
 
@@ -210,7 +215,6 @@ void extract_pdf_references_with_grobid(const std::string& pdf_path) {
 
     std::cout << "References written to " << out_path << "\n";
 }
-
 
 // searching arXiv
 std::string query_arxiv_for_doi(const std::string& title) {
