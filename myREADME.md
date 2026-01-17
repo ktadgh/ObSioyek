@@ -33,3 +33,29 @@ curl -v -F "input=@/Users/tadghk/Desktop/Reading/papers/september 25/FP8 versus 
 curl -s "https://api.semanticscholar.org/graph/v1/paper/arXiv:2106.04560?fields=title,authors,year,referenceCount,citations,references.title,references.authors,references.doi" \
   | jq
 ```
+
+
+
+### Building Sioyek on mac (i had already cloned it)
+```bash
+git submodule update --init --recursive
+chmod +x build_mac.sh
+```
+
+install gui dependencies
+```bash
+brew install 'qt@5' freeglut mesa harfbuzz
+brew info 'qt@5'
+```
+
+add qt to path (using path from above command)
+```bash
+export PATH="/opt/homebrew/opt/qt@5/bin:$PATH"
+```
+
+and build:
+```bash
+MAKE_PARALLEL=8 ./build_mac.sh
+mv build/sioyek.app /Applications/ # i may skip this since I already have sioyek
+sudo codesign --force --sign - --deep /Applications/sioyek.app
+```
