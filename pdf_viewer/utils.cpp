@@ -1975,6 +1975,10 @@ QCommandLineParser* get_command_line_parser() {
     QCommandLineOption no_auto_config_option("no-auto-config", "Disables all config files except the ones next to the executable. Used mainly for testing.");
     parser->addOption(no_auto_config_option);
 
+
+    QCommandLineOption extract_references_option("extract-references", "Extracts references using grobid and creates markdown files");
+    parser->addOption(extract_references_option); //adding an option to extract references and close the file
+
     parser->addHelpOption();
 
     return parser;

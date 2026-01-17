@@ -104,6 +104,7 @@ HEADERS += pdf_viewer/book.h \
            pdf_viewer/utf8/unchecked.h \
            pdf_viewer/RunGuard.h \
            pdf_viewer/OpenWithApplication.h \
+           pdf_viewer/grobid_utils.h \
            fzf/fzf.h
 
 
@@ -127,6 +128,7 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/mysortfilterproxymodel.cpp \
            pdf_viewer/RunGuard.cpp \
            pdf_viewer/OpenWithApplication.cpp \
+           pdf_viewer/grobid_utils.cpp \
            fzf/fzf.c
 
 !android{
@@ -213,7 +215,7 @@ mac {
     QMAKE_CXXFLAGS += -std=c++17
     LIBS += -ldl -L$$PWD/mupdf/build/release -lmupdf -lmupdf-third -lmupdf-threads -lz
     CONFIG+=sdk_no_version_check
-    QMAKE_MACOSX_DEPLOYMENT_TARGET = 15
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 26
     ICON = pdf_viewer\icon2.ico
     QMAKE_INFO_PLIST = resources/Info.plist
     LIBS += -framework AppKit

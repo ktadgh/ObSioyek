@@ -1374,6 +1374,159 @@ public:
     }
 };
 
+#pragma once
+#include "Command.h"
+#include "MainWidget.h"
+#include <fstream>
+#include <filesystem>
+#include <iostream>
+#include <sstream>
+#include <vector>
+#include <string>
+
+namespace fs = std::filesystem;
+
+class ParseReferencesCommand : public Command {
+public:
+    static inline const std::string cname = "parse_references"; //static = shared across instances
+    static inline const std::string hname = "Parse references and create markdown";
+
+    ParseReferencesCommand(MainWidget* w) : Command(cname, w) {} //initializer - just need to initialize command
+
+    void perform() override {
+        if (!widget) return;
+
+        DocumentView* dv = widget->dv();
+        if (!dv) return;
+
+        DocumentViewState state = dv->get_state();
+        if (state.document_path.empty()) return;
+
+        parse_and_store_references(state.document_path);
+    }
+
+private:
+    void parse_and_store_references(const std::string& pdf_path) {
+        if (pdf_path.empty()) {
+            std::cerr << "No PDF open\n";
+            return;
+        }
+
+        if (!fs::exists(pdf_path)) {
+            std::cerr << "PDF file does not exist\n";
+            return;
+        }
+
+        // 1️⃣ Get paper title from Grobid
+        std::string paper_title = get_paper_title_with_grobid(pdf_path);
+        if (paper_title.empty()) {
+            std::cerr << "Could not extract paper title, using PDF filename instead\n";
+            paper_title = fs::path(pdf_path).stem().string();
+        }
+
+        // sanitize title for filesystem
+        std::string safe_title = paper_title;
+        for (auto& c : safe_title) if (c == '/' || c == '\\' || c == ':') c = '_';
+
+        fs::path md_path = fs::path(pdf_path).parent_path() / (safe_title + ".md");
+        std::ofstream out(md_path);
+        if (!out.is_open()) {
+            std::cerr << "Failed to create markdown file\n";
+            return;
+        }
+
+        out << "# " << paper_title << "\n\n";
+
+        // 2️⃣ Get paper DOI
+        std::string doi = ""; // start empty
+        doi = query_arxiv_for_doi(paper_title);
+        if (doi.empty()) doi = query_crossref_for_doi(paper_title);
+
+        if (!doi.empty()) {
+            out << "DOI: " << doi << "\n\n";
+        }
+
+        // 3️⃣ Get references using Grobid
+        std::vector<std::string> references = extract_pdf_references_with_grobid(pdf_path);
+
+        // 4️⃣ Write references with DOIs
+        for (auto& ref : references) {
+            std::string ref_doi = normalize_arxiv_from_text(ref);
+            if (ref_doi.empty()) ref_doi = query_arxiv_for_doi(ref);
+            if (ref_doi.empty()) ref_doi = query_crossref_for_doi(ref);
+
+            out << "- " << ref;
+            if (!ref_doi.empty()) out << "  \n  DOI: " << ref_doi;
+            out << "\n";
+        }
+
+        out.close();
+        std::cout << "Markdown references written to " << md_path << "\n";
+    }
+
+    std::vector<std::string> extract_pdf_references_with_grobid(const std::string& pdf_path) {
+        std::vector<std::string> refs;
+        if (!ensure_grobid_running()) return refs;
+
+        std::string pdf_data = read_file_binary(pdf_path);
+
+        httplib::MultipartFormDataItems items;
+        items.push_back({
+            "input",
+            pdf_data,
+            fs::path(pdf_path).filename().string(),
+            "application/pdf"
+        });
+
+        httplib::Client cli("http://localhost:8070");
+        cli.set_read_timeout(60, 0);
+
+        auto res = cli.Post("/api/processReferences", items);
+        if (!res || res->status != 200) {
+            std::cerr << "Grobid failed to process references\n";
+            return refs;
+        }
+
+        refs = extract_biblstruct_text(res->body);
+        return refs;
+    }
+
+    std::string get_paper_title_with_grobid(const std::string& pdf_path) {
+        if (!ensure_grobid_running()) return "";
+
+        std::string pdf_data = read_file_binary(pdf_path);
+        httplib::MultipartFormDataItems items;
+        items.push_back({
+            "input",
+            pdf_data,
+            fs::path(pdf_path).filename().string(),
+            "application/pdf"
+        });
+
+        httplib::Client cli("http://localhost:8070");
+        cli.set_read_timeout(30, 0);
+
+        auto res = cli.Post("/api/processHeaderDocument", items);
+        if (!res || res->status != 200) {
+            std::cerr << "Grobid header extraction failed\n";
+            return "";
+        }
+
+        tinyxml2::XMLDocument doc;
+        if (doc.Parse(res->body.c_str()) != tinyxml2::XML_SUCCESS) return "";
+
+        auto* title_el = doc.RootElement()
+                             ->FirstChildElement("teiHeader")
+                             ->FirstChildElement("fileDesc")
+                             ->FirstChildElement("titleStmt")
+                             ->FirstChildElement("title");
+        if (!title_el || !title_el->GetText()) return "";
+
+        return title_el->GetText();
+    }
+};
+
+
 class MoveTextMarkUpCommand : public Command {
 public:
     static inline const std::string cname = "move_text_mark_up";
