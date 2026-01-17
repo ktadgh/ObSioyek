@@ -53,9 +53,40 @@ add qt to path (using path from above command)
 export PATH="/opt/homebrew/opt/qt@5/bin:$PATH"
 ```
 
+solving some build issues
+```bash
+brew install gnu-sed
+export PATH="/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
+```
+
+
 and build:
 ```bash
 MAKE_PARALLEL=8 ./build_mac.sh
 mv build/sioyek.app /Applications/ # i may skip this since I already have sioyek
+sudo codesign --force --sign - --deep /Applications/sioyek.app
+```
+
+
+trying again - development instructions:
+```bash
+brew uninstall qt
+python3 -m venv myenv
+source myenv/bin/activate
+pip install aqtinstall
+mkdir ~/Qt 
+cd ~/Qt
+aqt install-qt mac desktop 6.8.2 clang_64 -m all
+export Qt6_DIR=~/Qt/6.8.2/macos/
+export QT_PLUGIN_PATH=~/Qt/6.8.2/macos/plugins
+export PKG_CONFIG_PATH=~/Qt/6.8.2/macos/lib/pkgconfig
+export QML2_IMPORT_PATH=~/Qt/6.8.2/macos/qml
+export PATH="~/Qt/6.8.2/macos/bin:$PATH"
+git clone --recursive --branch development https://github.com/ahrm/sioyek
+cd sioyek
+chmod +x build_mac.sh
+setopt PIPE_FAIL PRINT_EXIT_VALUE ERR_RETURN SOURCE_TRACE XTRACE
+MAKE_PARALLEL=8 ./build_mac.sh
+mv build/sioyek.app /Applications/
 sudo codesign --force --sign - --deep /Applications/sioyek.app
 ```
