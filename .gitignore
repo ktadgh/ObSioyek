@@ -395,3 +395,7 @@ flake*
 # ctags
 tags
 .vscode
+
+
+.sioyek_pass.txt
+

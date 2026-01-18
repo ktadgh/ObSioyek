@@ -103,8 +103,9 @@ setopt PIPE_FAIL PRINT_EXIT_VALUE ERR_RETURN SOURCE_TRACE XTRACE
 MAKE_PARALLEL=8 ./build_mac.sh
 rm -rf /Applications/sioyek.app
 mv build/sioyek.app /Applications/
-sudo codesign --force --sign - --deep /Applications/sioyek.app
+sudo -S codesign --force --sign - --deep /Applications/sioyek.app < ~/.sioyek_pass.txt
 ```
+
 
 running
 ```bash
