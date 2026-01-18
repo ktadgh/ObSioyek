@@ -8,7 +8,6 @@ namespace fs = std::filesystem;
 
 std::string url_encode(const std::string& value);
 
-
 std::string read_file_binary(const fs::path& path);
 
 bool ensure_grobid_running();

@@ -111,6 +111,7 @@ HEADERS += pdf_viewer/book.h \
            pdf_viewer/RunGuard.h \
            pdf_viewer/OpenWithApplication.h \
            pdf_viewer/grobid_utils.h \
+           pdf_viewer/markdown.h \
            fzf/fzf.h
 
 
@@ -135,6 +136,8 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/RunGuard.cpp \
            pdf_viewer/OpenWithApplication.cpp \
            pdf_viewer/grobid_utils.cpp \
+           pdf_viewer/markdown.cpp \
+
            fzf/fzf.c
 
 !android{
