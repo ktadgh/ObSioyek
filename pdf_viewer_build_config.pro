@@ -6,7 +6,7 @@ INCLUDEPATH += ./pdf_viewer \
                mupdf/include \
                ./cpp-httplib \ 
                ./tinyxml2 \
-               ./json/include
+               ./json/single_include
 
 
 
@@ -50,7 +50,8 @@ SOURCES += \
         pdf_viewer/touchui/TouchDrawControls.cpp \
         pdf_viewer/touchui/TouchMacroEditor.cpp \
         pdf_viewer/touchui/TouchGenericButtons.cpp \
-        pdf_viewer/touchui/TouchMainMenu.cpp
+        pdf_viewer/touchui/TouchMainMenu.cpp \
+        tinyxml2/tinyxml2.cpp
 
 HEADERS += \
     pdf_viewer/touchui/TouchSlider.h \

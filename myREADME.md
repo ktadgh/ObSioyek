@@ -90,3 +90,28 @@ MAKE_PARALLEL=8 ./build_mac.sh
 mv build/sioyek.app /Applications/
 sudo codesign --force --sign - --deep /Applications/sioyek.app
 ```
+
+
+```bash
+export Qt6_DIR=~/Qt/6.8.2/macos/
+export QT_PLUGIN_PATH=~/Qt/6.8.2/macos/plugins
+export PKG_CONFIG_PATH=~/Qt/6.8.2/macos/lib/pkgconfig
+export QML2_IMPORT_PATH=~/Qt/6.8.2/macos/qml
+export PATH="~/Qt/6.8.2/macos/bin:$PATH"
+chmod +x build_mac.sh
+setopt PIPE_FAIL PRINT_EXIT_VALUE ERR_RETURN SOURCE_TRACE XTRACE
+MAKE_PARALLEL=8 ./build_mac.sh
+rm -rf /Applications/sioyek.app
+mv build/sioyek.app /Applications/
+sudo codesign --force --sign - --deep /Applications/sioyek.app
+```
+
+running
+```bash
+/Applications/sioyek.app/Contents/MacOS/sioyek
+```
+
+dealing with issues (removing all old object files)
+```bash
+find . -name "*.o" -delete
+```

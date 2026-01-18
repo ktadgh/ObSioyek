@@ -7381,7 +7381,11 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
     register_command<MoveSelectedBookmarkCommand>();
     register_command<RepeatLastCommandCommnad>();
     register_command<CloseWindowCommand>("q");
+    register_command<ParseReferencesCommand>();
 
+    // new_commands["parse_references"] = [this](MainWidget* w) {
+    // return std::make_unique<ParseReferencesCommand>(w, this);
+    // };
 
     for (auto [command_name_, command_value] : ADDITIONAL_COMMANDS) {
         std::string command_name = utf8_encode(command_name_);
