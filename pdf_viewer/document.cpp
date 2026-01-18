@@ -632,14 +632,53 @@ std::optional<Mark> Document::get_mark_if_exists(char symbol){
     return marks[mark_index];
 }
 
+#include "markdown.h"
+#include "config.h"  // for load_vault_config
+
 Document::Document(fz_context* context, std::wstring file_name, DatabaseManager* db, CachedChecksummer* checksummer) :
     db_manager(db),
     context(context),
     file_name(file_name),
     checksummer(checksummer),
-    doc(nullptr) {
+    doc(nullptr)
+{
     last_update_time = QDateTime::currentDateTime();
     should_render_annotations = SHOULD_RENDER_PDF_ANNOTATIONS;
+
+    // --- Initialize MarkdownFile using the Obsidian vault path ---
+    try {
+        ObsidianConfig cfg = load_vault_config("/Users/tadghk/grobid-test/config.json");
+
+        fs::path markdown_path = file_name; // default to same folder as PDF
+        if (!cfg.vault_path.empty()) {
+            fs::path vault_dir = fs::path(cfg.vault_path);
+            fs::create_directories(vault_dir);  // ensure vault folder exists
+            markdown_path = vault_dir / fs::path(file_name).filename();
+            markdown_path.replace_extension(".md"); // ensure markdown extension
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to initialize MarkdownFile: " << e.what() << "\n";
+    }
+}
+
+void Document::add_highlight_to_markdown(const std::wstring& text,
+                                         const std::string& uuid,
+                                         char type,
+                                         int page,
+                                         float x,
+                                         float y) 
+{
+    MarkdownFile md(markdown_path);
+    
+    std::wstring link = L"[sioyek://open?file=" + get_pdf_filename() +
+                        L"&page=" + std::to_wstring(page) +
+                        L"&x=" + std::to_wstring((int)x) +
+                        L"&y=" + std::to_wstring((int)y) +
+                        L"](Back to Sioyek)";
+
+    md.add_highlight(link + L" " + text, uuid, type);
+    md.save();
 }
 
 void Document::count_chapter_pages(std::vector<int>& page_counts) {

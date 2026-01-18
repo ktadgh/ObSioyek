@@ -22,4 +22,9 @@ public:
     void save();
 };
 
+struct ObsidianConfig {
+    std::string vault_name;
+    std::string vault_path;
+};
+
 #endif // MARKDOWN_H

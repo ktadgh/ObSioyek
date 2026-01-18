@@ -22,6 +22,7 @@
 
 #include "book.h"
 #include "coordinates.h"
+#include "markdown.h"
 
 class CachedChecksummer;
 class DatabaseManager;
@@ -63,7 +64,7 @@ struct CachedPageIndex {
 class Document {
 
 private:
-
+    std::string markdown_path;
     std::mutex drawings_mutex;
     std::map<int, std::vector<FreehandDrawing>> page_freehand_drawings;
     // it means we have modified freehand drawings since the document was loaded
@@ -163,7 +164,7 @@ private:
 
     // convetr the fz_outline structure to our own TocNode structure
     void create_toc_tree(std::vector<TocNode*>& toc);
-
+    void add_highlight_to_markdown(const std::wstring& text, const std::string& uuid, char type);
     Document(fz_context* context, std::wstring file_name, DatabaseManager* db_manager, CachedChecksummer* checksummer);
     void clear_toc_nodes();
     void clear_toc_node(TocNode* node);

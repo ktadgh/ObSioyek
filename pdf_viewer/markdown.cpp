@@ -90,13 +90,56 @@ void MarkdownFile::add_references(const std::vector<std::string>& refs,
     }
 }
 
+ObsidianConfig load_vault_config(const std::string& config_file) {
+    ObsidianConfig cfg;
+    std::ifstream in(config_file);
+    if (!in.is_open()) {
+        std::cerr << "Could not open config file: " << config_file << "\n";
+        return cfg;
+    }
+    try {
+        nlohmann::json j;
+        in >> j;
+        if (j.contains("vault_name")) cfg.vault_name = j["vault_name"];
+        if (j.contains("vault_path")) cfg.vault_path = j["vault_path"];
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to parse config: " << e.what() << "\n";
+    }
+    return cfg;
+}
+
+
 void MarkdownFile::save() {
-    std::ofstream out(file_path);
+    ObsidianConfig cfg = load_vault_config("/Users/tadghk/grobid-test/config.json");
+
+    fs::path output_path = file_path;
+    
+    if (!cfg.vault_path.empty()) {
+        fs::path vault_dir = fs::path(cfg.vault_path);
+
+        std::error_code ec;
+        fs::create_directories(vault_dir, ec);
+
+        output_path = vault_dir / fs::path(file_path).filename();
+    }
+
+    std::ofstream out(output_path);
     if (!out.is_open()) {
-        std::cerr << "Failed to open file " << file_path << " for writing\n";
+        std::cerr << "Failed to open file " << output_path << " for writing\n";
         return;
     }
+
     for (const auto& line : lines) {
         out << line << "\n";
     }
+    out.close();
+
+    // Open the file in Obsidian
+    std::string command = "obsidian \"" + output_path.string() + "\"";
+    int result = std::system(command.c_str());
+    if (result != 0) {
+        std::cerr << "Failed to open file in Obsidian. Make sure Obsidian is in your PATH.\n";
+    }
 }
+
+
