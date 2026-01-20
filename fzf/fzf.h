@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
   int16_t *data;
   size_t size;
@@ -107,5 +111,9 @@ void fzf_free_positions(fzf_position_t *pos);
 fzf_slab_t *fzf_make_slab(fzf_slab_config_t config);
 fzf_slab_t *fzf_make_default_slab(void);
 void fzf_free_slab(fzf_slab_t *slab);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // FZF_H_

@@ -64,7 +64,7 @@ struct CachedPageIndex {
 class Document {
 
 private:
-    std::string markdown_path;
+    std::unique_ptr<MarkdownFile> md_file;
     std::mutex drawings_mutex;
     std::map<int, std::vector<FreehandDrawing>> page_freehand_drawings;
     // it means we have modified freehand drawings since the document was loaded
@@ -164,14 +164,18 @@ private:
 
     // convetr the fz_outline structure to our own TocNode structure
     void create_toc_tree(std::vector<TocNode*>& toc);
-    void add_highlight_to_markdown(const std::wstring& text, const std::string& uuid, char type);
     Document(fz_context* context, std::wstring file_name, DatabaseManager* db_manager, CachedChecksummer* checksummer);
     void clear_toc_nodes();
     void clear_toc_node(TocNode* node);
     int find_highlight_index_with_uuid(const std::string& uuid);
+    
 public:
+    std::string markdown_path;
     fz_document* doc = nullptr;
     std::wstring detected_paper_name = L"";
+    void add_highlight_to_markdown(const std::wstring& text, const std::string& uuid, char type, int page, float x, float y);
+    MarkdownFile* get_markdown_file(const std::string& paper_title);
+    MarkdownFile* get_markdown_file();
 
     PageIterator page_iterator(int page_number);
     int get_page_text_and_line_rects_after_rect(int page_number,
@@ -179,7 +183,7 @@ public:
         std::wstring& text,
         std::vector<PagelessDocumentRect>& line_rects,
         std::vector<PagelessDocumentRect>& char_rects);
-
+    
     void load_document_metadata_from_db();
     std::string add_bookmark(const std::wstring& desc, float y_offset);
     std::string add_marked_bookmark(const std::wstring& desc, AbsoluteDocumentPos pos);

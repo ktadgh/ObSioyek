@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <thread>
 #include <cmath>
+#include <filesystem>
 #include "coordinates.h"
 #include "utf8.h"
 #include <qfileinfo.h>
@@ -25,6 +26,11 @@
 #include "database.h"
 #include "utf8/checked.h"
 #include "utils.h"
+#include "grobid_utils.h"
+#include "markdown.h"
+// #include "config.h"
+
+namespace fs = std::filesystem;
 
 extern bool SHOULD_RENDER_PDF_ANNOTATIONS;
 
@@ -614,6 +620,48 @@ void Document::add_mark(char symbol, float y_offset, std::optional<float> x_offs
     }
 }
 
+MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
+    if (!md_file) {
+        // 1️⃣ Determine safe filename
+        std::string safe_title;
+        if (!paper_title.empty()) {
+            safe_title = sanitize_for_filename(paper_title) + ".md";
+        } else {
+            safe_title = fs::path(file_name).stem().string() + ".md";
+        }
+
+        try {
+            // 2️⃣ Load vault config
+            ObsidianConfig cfg = load_vault_config("/Users/tadghk/sioyek/config.json");
+
+            // 3️⃣ Build full path inside vault if available
+            fs::path md_path = safe_title;  // default: current folder
+            if (!cfg.vault_path.empty()) {
+                fs::path vault_dir(cfg.vault_path);
+                fs::create_directories(vault_dir);  // ensure vault exists
+                md_path = vault_dir / safe_title;
+            }
+
+            markdown_path = md_path.string();
+
+            // 4️⃣ Create the canonical MarkdownFile instance
+            md_file = std::make_unique<MarkdownFile>(markdown_path, paper_title);
+
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to initialize markdown file: " << e.what() << "\n";
+            return nullptr;
+        }
+    }
+
+    // 5️⃣ Return pointer to canonical MarkdownFile
+    return md_file.get();
+}
+
+MarkdownFile* Document::get_markdown_file() {
+    return md_file.get();
+}
+
+
 bool Document::remove_mark(char symbol) {
     for (size_t i = 0; i < marks.size(); i++) {
         if (marks[i].symbol == symbol) {
@@ -632,8 +680,6 @@ std::optional<Mark> Document::get_mark_if_exists(char symbol){
     return marks[mark_index];
 }
 
-#include "markdown.h"
-#include "config.h"  // for load_vault_config
 
 Document::Document(fz_context* context, std::wstring file_name, DatabaseManager* db, CachedChecksummer* checksummer) :
     db_manager(db),
@@ -645,22 +691,24 @@ Document::Document(fz_context* context, std::wstring file_name, DatabaseManager*
     last_update_time = QDateTime::currentDateTime();
     should_render_annotations = SHOULD_RENDER_PDF_ANNOTATIONS;
 
-    // --- Initialize MarkdownFile using the Obsidian vault path ---
+    // --- Initialize markdown_path using the Obsidian vault path ---
     try {
-        ObsidianConfig cfg = load_vault_config("/Users/tadghk/grobid-test/config.json");
+        ObsidianConfig cfg = load_vault_config("/Users/tadghk/sioyek/config.json");
 
-        fs::path markdown_path = file_name; // default to same folder as PDF
+        fs::path md_path = utf8_encode(file_name); // default to same folder as PDF
+        md_path.replace_extension(".md");
         if (!cfg.vault_path.empty()) {
             fs::path vault_dir = fs::path(cfg.vault_path);
             fs::create_directories(vault_dir);  // ensure vault folder exists
-            markdown_path = vault_dir / fs::path(file_name).filename();
-            markdown_path.replace_extension(".md"); // ensure markdown extension
+            md_path = vault_dir / md_path.filename();
         }
+        markdown_path = md_path.string();
 
     } catch (const std::exception& e) {
-        std::cerr << "Failed to initialize MarkdownFile: " << e.what() << "\n";
+        std::cerr << "Failed to initialize markdown_path: " << e.what() << "\n";
     }
 }
+
 
 void Document::add_highlight_to_markdown(const std::wstring& text,
                                          const std::string& uuid,
@@ -669,16 +717,17 @@ void Document::add_highlight_to_markdown(const std::wstring& text,
                                          float x,
                                          float y) 
 {
-    MarkdownFile md(markdown_path);
-    
-    std::wstring link = L"[sioyek://open?file=" + get_pdf_filename() +
+    MarkdownFile* md = get_markdown_file();
+    if (!md) return; // safety check
+
+    std::wstring link = L"[Back to Sioyek](sioyek://open?file=" + file_name +
                         L"&page=" + std::to_wstring(page) +
                         L"&x=" + std::to_wstring((int)x) +
                         L"&y=" + std::to_wstring((int)y) +
-                        L"](Back to Sioyek)";
+                        L")";
 
-    md.add_highlight(link + L" " + text, uuid, type);
-    md.save();
+    md->add_highlight(link + L" " + text, uuid, type);
+    md->save();
 }
 
 void Document::count_chapter_pages(std::vector<int>& page_counts) {

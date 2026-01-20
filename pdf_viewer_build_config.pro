@@ -137,7 +137,6 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/OpenWithApplication.cpp \
            pdf_viewer/grobid_utils.cpp \
            pdf_viewer/markdown.cpp \
-
            fzf/fzf.c
 
 !android{
@@ -229,6 +228,10 @@ mac {
     QMAKE_INFO_PLIST = resources/Info.plist
     LIBS += -framework AppKit
     OBJECTIVE_SOURCES += pdf_viewer/macos_specific.mm
+
+    # OpenSSL for httplib
+    INCLUDEPATH += /opt/homebrew/opt/openssl@3/include
+    LIBS += -L/opt/homebrew/opt/openssl@3/lib -lssl -lcrypto
 }
 
 android{

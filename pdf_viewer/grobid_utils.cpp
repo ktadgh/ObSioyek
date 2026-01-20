@@ -132,6 +132,89 @@ std::string normalize_arxiv_from_text(const std::string& text) {
 }
 
 
+std::string extract_paper_title_from_tei(const std::string& tei_xml) {
+    tinyxml2::XMLDocument doc;
+    if (doc.Parse(tei_xml.c_str()) != tinyxml2::XML_SUCCESS) {
+        return "";
+    }
+
+    auto* root = doc.RootElement();
+    if (!root) return "";
+
+    // Navigate to title: teiHeader/fileDesc/titleStmt/title
+    auto* teiHeader = root->FirstChildElement("teiHeader");
+    if (!teiHeader) return "";
+
+    auto* fileDesc = teiHeader->FirstChildElement("fileDesc");
+    if (!fileDesc) return "";
+
+    auto* titleStmt = fileDesc->FirstChildElement("titleStmt");
+    if (!titleStmt) return "";
+
+    auto* title = titleStmt->FirstChildElement("title");
+    if (title && title->GetText()) {
+        return title->GetText();
+    }
+
+    return "";
+}
+
+std::string sanitize_for_filename(const std::string& title) {
+    std::string result;
+    for (char c : title) {
+        // Replace invalid filename characters
+        if (c == ':') {
+            result += " -";  // Replace colon with " -" for readability
+        } else if (c == '/' || c == '\\' || c == '*' ||
+                   c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
+            result += ' ';
+        } else {
+            result += c;
+        }
+    }
+    // Trim leading/trailing spaces
+    size_t start = result.find_first_not_of(' ');
+    size_t end = result.find_last_not_of(' ');
+    if (start == std::string::npos) return "untitled";
+    result = result.substr(start, end - start + 1);
+    // Limit length
+    if (result.size() > 200) result.resize(200);
+    return result.empty() ? "untitled" : result;
+}
+
+std::string extract_paper_title_with_grobid(const std::string& pdf_path) {
+    if (!fs::exists(pdf_path)) {
+        return "";
+    }
+
+    if (!ensure_grobid_running()) {
+        return "";
+    }
+
+    std::string pdf_data = read_file_binary(pdf_path);
+
+    httplib::Client cli("http://localhost:8070");
+    cli.set_read_timeout(60, 0);
+
+    httplib::UploadFormDataItems items = {
+        {
+            "input",
+            pdf_data,
+            fs::path(pdf_path).filename().string(),
+            "application/pdf"
+        }
+    };
+
+    auto res = cli.Post("/api/processHeaderDocument", httplib::Headers{}, items);
+
+    if (!res || res->status != 200) {
+        std::cerr << "GROBID processHeaderDocument failed\n";
+        return "";
+    }
+
+    return extract_paper_title_from_tei(res->body);
+}
+
 std::vector<std::string> extract_bibl_titles(const std::string& tei_xml) {
     std::vector<std::string> results;
 
@@ -233,6 +316,18 @@ void extract_pdf_references_with_grobid(const std::string& pdf_path) {
         return;
     }
 
+    // First, extract the paper title using GROBID
+    std::string paper_title = extract_paper_title_with_grobid(pdf_path);
+    std::string md_filename;
+    if (!paper_title.empty()) {
+        md_filename = sanitize_for_filename(paper_title) + ".md";
+        std::cout << "Extracted paper title: " << paper_title << "\n";
+    } else {
+        // Fall back to PDF filename if title extraction fails
+        md_filename = fs::path(pdf_path).stem().string() + ".md";
+        std::cerr << "Could not extract title, using PDF filename\n";
+    }
+
     std::string pdf_data = read_file_binary(pdf_path);
 
     httplib::Client cli("http://localhost:8070");
@@ -260,13 +355,7 @@ void extract_pdf_references_with_grobid(const std::string& pdf_path) {
     auto refs = extract_bibl_titles(res->body);
 
     // --- Use MarkdownFile to manage the output ---
-    fs::path out_path = fs::path(pdf_path).replace_extension(".md");
-    MarkdownFile md(out_path.string());
-
-    // Example: add a highlight section above references
-    md.add_highlight("These are highlights from the extracted references:");
-    md.add_highlight("- Check DOI links for accuracy");
-    md.add_highlight("- Titles normalized for Obsidian linking");
+    MarkdownFile md(md_filename, paper_title);
 
     // Add each reference as an Obsidian link
     for (auto& ref : refs) {
@@ -282,17 +371,11 @@ void extract_pdf_references_with_grobid(const std::string& pdf_path) {
             doi = query_crossref_for_doi(ref);
         }
 
-        // Add as Markdown line
-        std::string line = ref;
-        if (!doi.empty()) {
-            line += "  \n  DOI: " + doi;
-        }
-
-        md.add_references({ref}, {doi}); // can add one at a time
+        md.add_references({ref}, {doi});
     }
 
     md.save();
-    std::cout << "References written to " << out_path << "\n";
+    std::cout << "References written to " << md_filename << "\n";
 }
 
 
@@ -308,17 +391,6 @@ std::string normalize_title(const std::string& title) {
 }
 
 
-
-#include <iostream>
-#include <string>
-#include <vector>
-#include <regex>
-#include <algorithm>
-#include <set>
-#include <sstream>
-#include <cctype>
-#include <httplib.h>
-#include <tinyxml2.h>
 
 // Helper: lowercase
 std::string to_lower(const std::string& s) {

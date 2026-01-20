@@ -5881,29 +5881,18 @@ void MainWidget::handle_goto_bookmark_global() {
     show_current_widget();
 }
 
-struct DocumentPos {
-    int page;
-    float x;
-    float y;
-
-    PagelessDocumentPos pageless() const;
-    AbsoluteDocumentPos to_absolute(Document* doc) const;
-    NormalizedWindowPos to_window_normalized(DocumentView* document_view) const;
-    WindowPos to_window(DocumentView* document_view) const;
-};
-
 std::wstring MainWidget::handle_add_highlight(char symbol) {
     if (main_document_view->selected_character_rects.size() > 0) {
         std::string uuid = main_document_view->add_highlight(selection_begin,
                                                              selection_end,
                                                              symbol);
-        
-        DocumentPos highlight_pos = absolute_to_page_pos_uncentered(selection_begin);
+
+        DocumentPos highlight_pos = doc()->absolute_to_page_pos_uncentered(selection_begin);
         int page = highlight_pos.page;
         float x = highlight_pos.x;
         float y = highlight_pos.y;
 
-        std::wstring selected_text = main_document_view->get_selected_text();
+        std::wstring selected_text = get_selected_text();
 
         doc()->add_highlight_to_markdown(selected_text, uuid, symbol, page, x, y);
 

@@ -14,6 +14,7 @@
 #include <qfileinfo.h>
 #include <qclipboard.h>
 #include <qguiapplication.h>
+#include <QtConcurrent/QtConcurrent>
 
 #include "utils.h"
 #include "input.h"
@@ -22,7 +23,9 @@
 #include "document.h"
 #include "document_view.h"
 #include "grobid_utils.h"
+#include "markdown.h"
 
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include <httplib.h>
 #include <tinyxml2.h>
 #include <nlohmann/json.hpp>
@@ -1399,69 +1402,56 @@ public:
         DocumentViewState state = dv->get_state();
         if (state.document_path.empty()) return;
 
-        parse_and_store_references(QString::fromStdWString(state.document_path).toStdString());
+        Document* doc = dv->get_document();
+        if (!doc) return;
+
+        std::string pdf_path = QString::fromStdWString(state.document_path).toStdString();
+
+        QtConcurrent::run([doc, pdf_path]() {
+            parse_and_store_references_async(doc, pdf_path);
+        });
     }
 
 private:
-    void parse_and_store_references(const std::string& pdf_path) {
-        if (pdf_path.empty()) {
-            std::cerr << "No PDF open\n";
+    static void parse_and_store_references_async(Document* doc, const std::string& pdf_path) {
+        if (!doc || pdf_path.empty() || !fs::exists(pdf_path)) {
+            std::cerr << "Invalid document or PDF path\n";
             return;
         }
-
-        if (!fs::exists(pdf_path)) {
-            std::cerr << "PDF file does not exist\n";
-            return;
-        }
-
-        // 1️⃣ Get paper title from Grobid
+        
         std::string paper_title = get_paper_title_with_grobid(pdf_path);
         if (paper_title.empty()) {
             std::cerr << "Could not extract paper title, using PDF filename instead\n";
             paper_title = fs::path(pdf_path).stem().string();
         }
 
-        // sanitize title for filesystem
-        std::string safe_title = paper_title;
-        for (auto& c : safe_title) if (c == '/' || c == '\\' || c == ':') c = '_';
+        std::string doi = query_arxiv_for_doi(paper_title);
+        if (doi.empty()) doi = query_crossref_for_doi(paper_title);
 
-        fs::path md_path = fs::path(pdf_path).parent_path() / (safe_title + ".md");
-        std::ofstream out(md_path);
-        if (!out.is_open()) {
+        std::vector<std::string> references = extract_pdf_references_with_grobid(pdf_path);
+        std::vector<std::string> reference_dois;
+        for (const auto& ref : references) {
+            std::string ref_doi = normalize_arxiv_from_text(ref);
+            if (ref_doi.empty()) ref_doi = query_arxiv_for_doi(ref);
+            if (ref_doi.empty()) ref_doi = query_crossref_for_doi(ref);
+            reference_dois.push_back(ref_doi);
+        }
+
+        MarkdownFile* md = doc->get_markdown_file(paper_title);
+        if (!md) {
             std::cerr << "Failed to create markdown file\n";
             return;
         }
 
-        out << "# " << paper_title << "\n\n";
+        md->add_alias(paper_title);
+        if (!doi.empty()) md->add_alias(doi);
 
-        // 2️⃣ Get paper DOI
-        std::string doi = ""; // start empty
-        doi = query_arxiv_for_doi(paper_title);
-        if (doi.empty()) doi = query_crossref_for_doi(paper_title);
+        md->add_references(references, reference_dois);
 
-        if (!doi.empty()) {
-            out << "DOI: " << doi << "\n\n";
-        }
-
-        // 3️⃣ Get references using Grobid
-        std::vector<std::string> references = extract_pdf_references_with_grobid(pdf_path);
-
-        // 4️⃣ Write references with DOIs
-        for (auto& ref : references) {
-            std::string ref_doi = normalize_arxiv_from_text(ref);
-            if (ref_doi.empty()) ref_doi = query_arxiv_for_doi(ref);
-            if (ref_doi.empty()) ref_doi = query_crossref_for_doi(ref);
-
-            out << "- " << ref;
-            if (!ref_doi.empty()) out << "  \n  DOI: " << ref_doi;
-            out << "\n";
-        }
-
-        out.close();
-        std::cout << "Markdown references written to " << md_path << "\n";
+        md->save();
     }
 
-    std::vector<std::string> extract_pdf_references_with_grobid(const std::string& pdf_path) {
+    static std::vector<std::string> extract_pdf_references_with_grobid(const std::string& pdf_path) {
         std::vector<std::string> refs;
         if (!ensure_grobid_running()) return refs;
 
@@ -1484,11 +1474,12 @@ private:
             return refs;
         }
 
-        refs = extract_biblstruct_text(res->body);
+        // Use extract_bibl_titles for proper paper title extraction
+        refs = extract_bibl_titles(res->body);
         return refs;
     }
 
-    std::string get_paper_title_with_grobid(const std::string& pdf_path) {
+    static std::string get_paper_title_with_grobid(const std::string& pdf_path) {
         if (!ensure_grobid_running()) return "";
 
         std::string pdf_data = read_file_binary(pdf_path);

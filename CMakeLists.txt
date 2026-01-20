@@ -72,6 +72,8 @@ qt_add_executable(sioyek WIN32 MACOSX_BUNDLE
     pdf_viewer/utf8/core.h
     pdf_viewer/utf8/unchecked.h
     pdf_viewer/utils.cpp pdf_viewer/utils.h
+    pdf_viewer/grobid_utils.cpp pdf_viewer/grobid_utils.h
+    pdf_viewer/markdown.cpp pdf_viewer/markdown.h
 )
 
 if(APPLE)
@@ -82,10 +84,14 @@ endif()
 
 target_compile_options(sioyek PRIVATE -Wno-inconsistent-missing-override)
 
-target_include_directories(sioyek PRIVATE 
-    pdf_viewer 
+target_include_directories(sioyek PRIVATE
+    pdf_viewer
     mupdf/include
     ${SQLite3_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+    cpp-httplib
+    tinyxml2
+    json/include
 )
 
 target_compile_definitions(sioyek PRIVATE
@@ -137,6 +143,7 @@ endif()
 find_package(ZLIB REQUIRED)
 find_package(HarfBuzz REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 if((QT_VERSION_MAJOR GREATER 5))
   target_compile_definitions(sioyek PRIVATE
@@ -153,6 +160,11 @@ add_library(fzf STATIC
     fzf/fzf.h
 )
 
+add_library(tinyxml2 STATIC
+    tinyxml2/tinyxml2.cpp
+    tinyxml2/tinyxml2.h
+)
+
 target_link_libraries(sioyek PRIVATE
     ${CMAKE_DL_LIBS}
     mupdf
@@ -160,6 +172,9 @@ target_link_libraries(sioyek PRIVATE
     ZLIB::ZLIB
     fzf
     SQLite::SQLite3
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    tinyxml2
 )
 
 if(APPLE)
