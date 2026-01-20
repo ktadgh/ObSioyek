@@ -79,8 +79,19 @@ void MarkdownFile::ensure_references_section() {
     }
 }
 
-void MarkdownFile::add_alias(const std::string& alias) {
-    if (alias.empty()) return;
+std::string strip_alias(const std::string& alias_url) {
+    const std::string arxiv_prefix = "https://arxiv.org/abs/";
+    if (alias_url.rfind(arxiv_prefix, 0) == 0) {
+        return alias_url.substr(arxiv_prefix.size());
+    }
+    return alias_url;
+}
+
+void MarkdownFile::add_alias(const std::string& alias_url) {
+    if (alias_url.empty()) return;
+
+    // Strip "https://arxiv.org/abs/" if present
+    std::string alias = strip_alias(alias_url);
 
     bool has_frontmatter = !lines.empty() && lines[0] == "---";
     if (has_frontmatter) {
@@ -114,11 +125,14 @@ void MarkdownFile::add_alias(const std::string& alias) {
     }
 }
 
+
 void MarkdownFile::add_references(const std::vector<std::string>& refs,
-                                  const std::vector<std::string>& dois)
+                                  const std::vector<std::string>& urls)
 {
     ensure_references_section();
     std::set<std::string> existing_refs;
+
+    // Collect existing reference titles to avoid duplicates
     for (size_t i = references_index + 1; i < lines.size(); ++i) {
         const std::string& line = lines[i];
         if (line.rfind("- [[", 0) == 0 && line.back() == ']') {
@@ -133,15 +147,27 @@ void MarkdownFile::add_references(const std::vector<std::string>& refs,
     }
 
     size_t insert_pos = lines.size();
+
     for (size_t i = 0; i < refs.size(); ++i) {
         const std::string& ref = refs[i];
-        std::string doi = (i < dois.size()) ? dois[i] : "";
+        std::string url = (i < urls.size()) ? urls[i] : "";
 
         if (existing_refs.count(ref) == 0) {
-            std::string link_line = !doi.empty()
-                                    ? "- [[" + doi + "|" + ref + "]]"
-                                    : "- [[" + ref + "]]";
-            lines.insert(lines.begin() + insert_pos, link_line);
+            std::string stripped_id = strip_alias(url);  // just the ID part
+
+            std::string line = "- [[" + ref + "]]";  // local note link
+
+            if (!url.empty()) {
+                line += " ([arXiv](" + url + "))";  // clickable arXiv URL
+            }
+
+            if (!stripped_id.empty()) {
+                line += " ([[";
+                line += stripped_id;  // DOI as local note
+                line += "]])";
+            }
+
+            lines.insert(lines.begin() + insert_pos, line);
             insert_pos++;
             existing_refs.insert(ref);
         }
