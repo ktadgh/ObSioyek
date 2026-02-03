@@ -73,7 +73,9 @@ qt_add_executable(sioyek WIN32 MACOSX_BUNDLE
     pdf_viewer/utf8/unchecked.h
     pdf_viewer/utils.cpp pdf_viewer/utils.h
     pdf_viewer/grobid_utils.cpp pdf_viewer/grobid_utils.h
+    pdf_viewer/grobid_document.cpp pdf_viewer/grobid_document.h
     pdf_viewer/markdown.cpp pdf_viewer/markdown.h
+    pdf_viewer/vault.cpp pdf_viewer/vault.h
 )
 
 if(APPLE)

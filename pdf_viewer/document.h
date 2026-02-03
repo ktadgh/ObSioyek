@@ -23,6 +23,7 @@
 #include "book.h"
 #include "coordinates.h"
 #include "markdown.h"
+#include "grobid_document.h"
 
 class CachedChecksummer;
 class DatabaseManager;
@@ -65,6 +66,7 @@ class Document {
 
 private:
     std::unique_ptr<MarkdownFile> md_file;
+    std::unique_ptr<GrobidDocument> grobid_doc;
     std::mutex drawings_mutex;
     std::map<int, std::vector<FreehandDrawing>> page_freehand_drawings;
     // it means we have modified freehand drawings since the document was loaded
@@ -176,6 +178,7 @@ public:
     void add_highlight_to_markdown(const std::wstring& text, const std::string& uuid, char type, int page, float x, float y);
     MarkdownFile* get_markdown_file(const std::string& paper_title);
     MarkdownFile* get_markdown_file();
+    GrobidDocument* get_grobid_document();
 
     PageIterator page_iterator(int page_number);
     int get_page_text_and_line_rects_after_rect(int page_number,

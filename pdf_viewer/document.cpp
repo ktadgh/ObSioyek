@@ -27,7 +27,9 @@
 #include "utf8/checked.h"
 #include "utils.h"
 #include "grobid_utils.h"
+#include "grobid_document.h"
 #include "markdown.h"
+#include "vault.h"
 // #include "config.h"
 
 namespace fs = std::filesystem;
@@ -622,30 +624,50 @@ void Document::add_mark(char symbol, float y_offset, std::optional<float> x_offs
 
 MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
     if (!md_file) {
-        // 1️⃣ Determine safe filename
-        std::string safe_title;
-        if (!paper_title.empty()) {
-            safe_title = sanitize_for_filename(paper_title) + ".md";
-        } else {
-            safe_title = fs::path(file_name).stem().string() + ".md";
-        }
-
         try {
-            // 2️⃣ Load vault config
-            ObsidianConfig cfg = load_vault_config("/Users/tadghk/sioyek/config.json");
-
-            // 3️⃣ Build full path inside vault if available
-            fs::path md_path = safe_title;  // default: current folder
-            if (!cfg.vault_path.empty()) {
-                fs::path vault_dir(cfg.vault_path);
-                fs::create_directories(vault_dir);  // ensure vault exists
-                md_path = vault_dir / safe_title;
+            // 1️⃣ Initialize and parse the GrobidDocument if not already done
+            if (!grobid_doc) {
+                std::string pdf_path(file_name.begin(), file_name.end());
+                grobid_doc = std::make_unique<GrobidDocument>(pdf_path);
+                grobid_doc->parse();
+                grobid_doc->resolve_dois();
             }
 
-            markdown_path = md_path.string();
+            // 2️⃣ Load vault and index it
+            Vault vault("/Users/tadghk/sioyek/config.json");
+            vault.Index();
 
-            // 4️⃣ Create the canonical MarkdownFile instance
-            md_file = std::make_unique<MarkdownFile>(markdown_path, paper_title);
+            // 3️⃣ Look up by DOI from GrobidDocument
+            std::string doi = grobid_doc->get_doi();
+            auto it = vault.papers.find(doi);
+            if (it != vault.papers.end()) {
+                // Found existing paper in vault
+                md_file = std::make_unique<MarkdownFile>(it->second);
+                markdown_path = it->second.canonical_path.string();
+            } else {
+                // Not found - create new file
+                std::string title = paper_title.empty() ? grobid_doc->get_title() : paper_title;
+                std::string safe_title;
+                if (!title.empty()) {
+                    safe_title = sanitize_for_filename(title) + ".md";
+                } else {
+                    safe_title = fs::path(file_name).stem().string() + ".md";
+                }
+
+                fs::path md_path = safe_title;
+                if (!vault.vault_path.empty()) {
+                    fs::create_directories(vault.vault_path);
+                    md_path = fs::path(vault.vault_path) / safe_title;
+                }
+
+                markdown_path = md_path.string();
+                md_file = std::make_unique<MarkdownFile>(markdown_path, title);
+
+                // Add the DOI as an alias if we have one
+                if (!doi.empty()) {
+                    md_file->add_alias(doi);
+                }
+            }
 
         } catch (const std::exception& e) {
             std::cerr << "Failed to initialize markdown file: " << e.what() << "\n";
@@ -653,12 +675,19 @@ MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
         }
     }
 
-    // 5️⃣ Return pointer to canonical MarkdownFile
     return md_file.get();
 }
 
 MarkdownFile* Document::get_markdown_file() {
     return md_file.get();
+}
+
+GrobidDocument* Document::get_grobid_document() {
+    if (!grobid_doc) {
+        std::string pdf_path(file_name.begin(), file_name.end());
+        grobid_doc = std::make_unique<GrobidDocument>(pdf_path);
+    }
+    return grobid_doc.get();
 }
 
 
