@@ -459,3 +459,105 @@ std::vector<std::string> extract_pdf_references_with_grobid(const std::string& p
     refs = extract_bibl_titles(res->body);
     return refs;
 }
+
+std::string get_paper_title_with_grobid(const std::string& pdf_path) {
+    if (!ensure_grobid_running()) return "";
+
+    std::string pdf_data = read_file_binary(pdf_path);
+    httplib::UploadFormDataItems items = {
+        {
+            "input",
+            pdf_data,
+            fs::path(pdf_path).filename().string(),
+            "application/pdf"
+        }
+    };
+
+    httplib::Client cli("http://localhost:8070");
+    cli.set_read_timeout(30, 0);
+
+    auto res = cli.Post("/api/processHeaderDocument", items);
+    if (!res || res->status != 200) {
+        std::cerr << "Grobid header extraction failed\n";
+        return "";
+    }
+
+    tinyxml2::XMLDocument doc;
+    if (doc.Parse(res->body.c_str()) != tinyxml2::XML_SUCCESS) return "";
+
+    auto* root = doc.RootElement();
+    if (!root) return "";
+
+    auto* teiHeader = root->FirstChildElement("teiHeader");
+    if (!teiHeader) return "";
+
+    auto* fileDesc = teiHeader->FirstChildElement("fileDesc");
+    if (!fileDesc) return "";
+
+    auto* titleStmt = fileDesc->FirstChildElement("titleStmt");
+    if (!titleStmt) return "";
+
+    auto* title_el = titleStmt->FirstChildElement("title");
+    if (!title_el || !title_el->GetText()) return "";
+
+    return title_el->GetText();
+}
+
+void process_pdf_references_standalone(const std::string& pdf_path, const std::string& vault_config_path) {
+    if (pdf_path.empty() || !fs::exists(pdf_path)) {
+        std::cerr << "Invalid PDF path: " << pdf_path << "\n";
+        return;
+    }
+
+    std::cout << "Processing: " << pdf_path << "\n";
+
+    // Get paper title
+    std::string paper_title = get_paper_title_with_grobid(pdf_path);
+    if (paper_title.empty()) {
+        std::cerr << "Could not extract paper title, using PDF filename instead\n";
+        paper_title = fs::path(pdf_path).stem().string();
+    }
+    std::cout << "Title: " << paper_title << "\n";
+
+    // Get DOI
+    std::string doi = query_arxiv_for_doi(paper_title);
+    if (doi.empty()) doi = query_crossref_for_doi(paper_title);
+    if (!doi.empty()) std::cout << "DOI: " << doi << "\n";
+
+    // Extract references
+    std::vector<std::string> references = extract_pdf_references_with_grobid(pdf_path);
+    std::cout << "Found " << references.size() << " references\n";
+
+    // Look up DOIs for references
+    std::vector<std::string> reference_dois;
+    for (const auto& ref : references) {
+        std::string ref_doi = normalize_arxiv_from_text(ref);
+        if (ref_doi.empty()) ref_doi = query_arxiv_for_doi(ref);
+        if (ref_doi.empty()) ref_doi = query_crossref_for_doi(ref);
+        reference_dois.push_back(ref_doi);
+    }
+
+    // Load vault config and create markdown file path
+    ObsidianConfig cfg = load_vault_config(vault_config_path);
+    std::string safe_title = sanitize_for_filename(paper_title) + ".md";
+
+    fs::path md_path = safe_title;
+    if (!cfg.vault_path.empty()) {
+        fs::create_directories(cfg.vault_path);
+        md_path = fs::path(cfg.vault_path) / safe_title;
+    }
+
+    std::cout << "Creating markdown: " << md_path.string() << "\n";
+
+    // Create and populate markdown file
+    MarkdownFile md(md_path.string(), paper_title);
+
+    md.add_alias(paper_title);
+    if (!doi.empty()) md.add_alias(doi);
+
+    md.add_references(references, reference_dois);
+
+    md.save_no_open();
+
+    std::cout << "Done: " << md_path.string() << "\n";
+}

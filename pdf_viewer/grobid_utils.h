@@ -34,3 +34,7 @@ std::string read_file_binary(const std::filesystem::path& path);
 // GROBID extraction
 std::vector<std::string> extract_bibl_titles(const std::string& tei_xml);
 std::vector<std::string> extract_pdf_references_with_grobid(const std::string& pdf_path);
+std::string get_paper_title_with_grobid(const std::string& pdf_path);
+
+// Standalone PDF processing (for headless/CLI use)
+void process_pdf_references_standalone(const std::string& pdf_path, const std::string& vault_config_path);

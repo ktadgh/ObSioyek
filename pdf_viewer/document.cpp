@@ -672,6 +672,23 @@ MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
         }
     }
 
+    // Move file from ./references/ to parent directory if needed
+    if (md_file) {
+        fs::path current_path = md_file->canonical_path;
+        if (current_path.parent_path().filename() == "references") {
+            fs::path new_path = current_path.parent_path().parent_path() / current_path.filename();
+            try {
+                if (fs::exists(current_path) && !fs::exists(new_path)) {
+                    fs::rename(current_path, new_path);
+                    markdown_path = new_path.string();
+                    md_file = std::make_unique<MarkdownFile>(markdown_path, "");
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to move markdown file from references: " << e.what() << "\n";
+            }
+        }
+    }
+
     return md_file.get();
 }
 

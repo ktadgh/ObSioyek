@@ -701,21 +701,6 @@ int main(int argc, char* args[]) {
     QCommandLineParser* parser = get_command_line_parser();
     parser->process(app.arguments());
 
-	if (parser->isSet("extract-references")) {
-		QStringList positional = parser->positionalArguments();
-
-		if (positional.isEmpty()) {
-			std::cerr << "No PDF file provided\n";
-			return 1;
-		}
-
-		QString pdfPath = positional.first();
-
-		extract_pdf_references_with_grobid(pdfPath.toStdString());
-
-		return 0;  //exit after extraction
-	}
-
     configure_paths();
     verify_config_paths();
 
