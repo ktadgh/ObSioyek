@@ -2,9 +2,9 @@
 Forking Sioyek for integration with Obsidian Vault.
 
 ## Goals:
-1. Parse references with Grobid and build markdown files with backlinks 
-2. Automatically add highlights and comments to markdown file for recording notes
-3. Use Obsidian's graph view for a litmap of papers
+1. ~~Parse references with Grobid and build markdown files with backlinks~~
+2. ~~Automatically add highlights and comments to markdown file for recording notes~~
+3. ~~Use Obsidian's graph view for a litmap of papers~~
 4. Allow scripting to build the markdown files for a folder or list of pdfs, without manually opening the GUI
 
 
