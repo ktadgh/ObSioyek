@@ -625,7 +625,6 @@ void Document::add_mark(char symbol, float y_offset, std::optional<float> x_offs
 MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
     if (!md_file) {
         try {
-            // 1️⃣ Initialize and parse the GrobidDocument if not already done
             if (!grobid_doc) {
                 std::string pdf_path(file_name.begin(), file_name.end());
                 grobid_doc = std::make_unique<GrobidDocument>(pdf_path);
@@ -633,11 +632,9 @@ MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
                 grobid_doc->resolve_dois();
             }
 
-            // 2️⃣ Load vault and index it
             Vault vault("/Users/tadghk/sioyek/config.json");
             vault.Index();
 
-            // 3️⃣ Look up by DOI from GrobidDocument
             std::string doi = grobid_doc->get_doi();
             auto it = vault.papers.find(doi);
             if (it != vault.papers.end()) {
@@ -679,6 +676,9 @@ MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
 }
 
 MarkdownFile* Document::get_markdown_file() {
+    if (!md_file) {
+        return get_markdown_file("");
+    }
     return md_file.get();
 }
 
@@ -755,7 +755,7 @@ void Document::add_highlight_to_markdown(const std::wstring& text,
                         L"&y=" + std::to_wstring((int)y) +
                         L")";
 
-    md->add_highlight(link + L" " + text, uuid, type);
+    md->add_highlight(link + L" " + text, uuid, type, page, y);
     md->save();
 }
 
@@ -3870,6 +3870,12 @@ void Document::update_highlight_add_text_annotation(const std::string& uuid, con
         highlights[highlight_index].text_annot = text_annot;
         highlights[highlight_index].update_modification_time();
 
+        // Sync comment to markdown file
+        MarkdownFile* md = get_markdown_file();
+        if (md) {
+            md->update_highlight_comment(uuid, text_annot);
+            md->save_no_open();
+        }
     }
 }
 

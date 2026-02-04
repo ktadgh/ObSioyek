@@ -66,14 +66,60 @@ MarkdownFile::MarkdownFile(const std::string& md_path, const std::string& paper_
     }
 }
 
-void MarkdownFile::add_highlight(const std::wstring& wline, const std::string& uuid, char type) {
+void MarkdownFile::add_highlight(const std::wstring& wline, const std::string& uuid, char type, int page, float y) {
     std::string line = utf8_encode(wline);
 
-    if (existing_highlights.count(line)) return;
+    printf("ADD_HIGHLIGHT: page=%d, y=%.1f, text=%s\n", page, y, line.substr(0, 50).c_str());
+
+    if (existing_highlights.count(line)) {
+        printf("  -> SKIPPED (duplicate)\n");
+        return;
+    }
 
     existing_highlights.insert(line);
     std::string full_line = "[Back to Sioyek](sioyek://open?" + uuid + ") " + line;
 
+    int end_pos = (references_index == -1) ? static_cast<int>(lines.size()) : references_index;
+    printf("  end_pos=%d, references_index=%d\n", end_pos, references_index);
+
+    // Find correct insertion point by comparing with existing sioyek highlights
+    // This only inserts the new highlight - it doesn't move any existing content
+    for (int i = 0; i < end_pos; ++i) {
+        const std::string& existing_line = lines[i];
+
+        // Only compare against sioyek highlight lines
+        size_t sioyek_pos = existing_line.find("sioyek://open?file=");
+        if (sioyek_pos == std::string::npos) {
+            continue;
+        }
+
+        // Extract page and y from existing highlight
+        size_t page_pos = existing_line.find("&page=", sioyek_pos);
+        size_t y_pos = existing_line.find("&y=", sioyek_pos);
+
+        if (page_pos != std::string::npos && y_pos != std::string::npos) {
+            try {
+                int existing_page = std::stoi(existing_line.substr(page_pos + 6));
+                float existing_y = std::stof(existing_line.substr(y_pos + 3));
+
+                printf("  comparing with line %d: existing_page=%d, existing_y=%.1f\n", i, existing_page, existing_y);
+
+                // If new highlight comes before this one in PDF order, insert here
+                if (page < existing_page || (page == existing_page && y < existing_y)) {
+                    printf("  -> INSERTING at position %d (before existing)\n", i);
+                    lines.insert(lines.begin() + i, full_line);
+                    if (references_index != -1) references_index++;
+                    return;
+                }
+            } catch (...) {
+                printf("  parse error on line %d\n", i);
+                continue;
+            }
+        }
+    }
+
+    // New highlight comes after all existing ones - insert at end of highlights section
+    printf("  -> INSERTING at end (position %d)\n", end_pos);
     if (references_index == -1) {
         lines.push_back(full_line);
     } else {

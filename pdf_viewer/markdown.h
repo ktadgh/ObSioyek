@@ -18,7 +18,7 @@ private:
 
 public:
     MarkdownFile(const std::string& path, const std::string& paper_title = "");
-    void add_highlight(const std::wstring& line, const std::string& uuid, char type);
+    void add_highlight(const std::wstring& line, const std::string& uuid, char type, int page, float y);
     void update_highlight_comment(const std::string& uuid, const std::wstring& comment);
     void delete_highlight(const std::string& uuid);
     void ensure_references_section();
