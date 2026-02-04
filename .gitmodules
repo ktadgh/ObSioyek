@@ -1,7 +1,17 @@
 [submodule "mupdf"]
 	path = mupdf
 	url = https://github.com/ArtifexSoftware/mupdf
+    ignore = dirty
 [submodule "zlib"]
 	path = zlib
 	url = https://github.com/madler/zlib
 	ignore = untracked
+[submodule "json"]
+	path = json
+	url = https://github.com/nlohmann/json.git
+[submodule "cpp-httplib"]
+	path = cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "tinyxml2"]
+	path = tinyxml2
+	url = https://github.com/leethomason/tinyxml2.git

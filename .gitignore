@@ -34,6 +34,7 @@ bld/
 
 # Visual Studio 2017 auto generated files
 Generated\ Files/
+packages.config
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
@@ -343,6 +344,7 @@ healthchecksdb
 sioyek-release/*
 linux-deploy-binaries/*
 build/*
+.build
 *.zip
 *.sln
 *.vcxproj
@@ -352,7 +354,6 @@ moc*
 
 # Linux and Mac build files
 Makefile
-sioyek
 libs/*
 lib_debug/*
 lib_release/*
@@ -370,3 +371,31 @@ tutorial/*.pdf
 tutorial/*.synctex.gz
 tutorial/*.bbl
 tutorial/*.blg
+*.o.d
+compile_commands.json
+
+sioyek_autogen/*
+sioyek.app/*
+qrc_resources.cpp
+*.cmake
+bak/*
+CMakeFiles/*
+CMakeCache.txt
+.rcc/*
+.qt_plugins/*
+.qt/*
+.DS_STORE
+tutorial/*.blg
+
+#Nix generated
+result
+flake*
+*.nix
+
+# ctags
+tags
+.vscode
+
+
+.sioyek_pass.txt
+
