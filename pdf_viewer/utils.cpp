@@ -1978,7 +1978,7 @@ QCommandLineParser* get_command_line_parser() {
 
 	QCommandLineOption extract_references_option("extract-references","Extract PDF references using Grobid and exit??");
 
-    parser->addOption(extractRefsOption);
+    parser->addOption(extract_references_option);
 
     parser->addHelpOption();
 
@@ -4479,26 +4479,5 @@ bool stext_page_has_lines(fz_stext_page* page) {
             }
         }
     }
-    return false;
-}
-
-bool should_trigger_delete(QKeyEvent *key_event) {
-    if (!key_event) {
-        return false;
-    }
-
-    // Check for the Delete key
-    if (key_event->key() == Qt::Key_Delete) {
-        return true;
-    }
-
-    // On macOS, treat the Backspace key as Delete as well
-#ifdef Q_OS_MAC
-    if (key_event->key() == Qt::Key_Backspace) {
-        return true;
-    }
-#endif
-
-    // For other platforms, Backspace does not trigger delete
     return false;
 }

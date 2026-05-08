@@ -71,13 +71,22 @@ void MarkdownFile::add_highlight(const std::wstring& wline, const std::string& u
 
     printf("ADD_HIGHLIGHT: page=%d, y=%.1f, text=%s\n", page, y, line.substr(0, 50).c_str());
 
-    if (existing_highlights.count(line)) {
+    // Extract just the text portion for dedup (strip leading sioyek:// link if present)
+    std::string text_for_dedup = line;
+    size_t sp = line.find("sioyek://");
+    if (sp != std::string::npos) {
+        size_t cp = line.find(')', sp);
+        if (cp != std::string::npos && cp + 2 < line.size())
+            text_for_dedup = line.substr(cp + 2);
+    }
+
+    if (existing_highlights.count(text_for_dedup)) {
         printf("  -> SKIPPED (duplicate)\n");
         return;
     }
 
-    existing_highlights.insert(line);
-    std::string full_line = "[Back to Sioyek](sioyek://open?" + uuid + ") " + line;
+    existing_highlights.insert(text_for_dedup);
+    std::string full_line = line;
 
     int end_pos = (references_index == -1) ? static_cast<int>(lines.size()) : references_index;
     printf("  end_pos=%d, references_index=%d\n", end_pos, references_index);

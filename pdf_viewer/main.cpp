@@ -12,6 +12,8 @@
 #endif
 
 #include <QDebug>
+#include <QUrl>
+#include <QUrlQuery>
 #include <qapplication.h>
 #include <qpushbutton.h>
 #ifndef SIOYEK_QT6
@@ -893,10 +895,23 @@ int main(int argc, char* args[]) {
 
     //main_widget->run_multiple_commands(STARTUP_COMMANDS);
 
-    // load input file from `QFileOpenEvent` for macOS drag and drop & "open with"
-    QObject::connect(&app, &OpenWithApplication::file_ready, [&main_widget](const QString& file_name) {
-        handle_args(QStringList() << QCoreApplication::applicationFilePath() << file_name);
-        });
+    // load input file from `QFileOpenEvent` for macOS drag and drop, "open with", and sioyek:// URLs
+    QObject::connect(&app, &OpenWithApplication::file_ready, [&main_widget](const QString& file_or_url) {
+        if (file_or_url.startsWith("sioyek://open?")) {
+            QUrl parsed_url(file_or_url);
+            QUrlQuery query(parsed_url);
+            QStringList args = {QCoreApplication::applicationFilePath(), query.queryItemValue("file")};
+            QString page = query.queryItemValue("page");
+            QString xloc = query.queryItemValue("x");
+            QString yloc = query.queryItemValue("y");
+            if (!page.isEmpty()) args << "--page" << page;
+            if (!xloc.isEmpty()) args << "--xloc" << xloc;
+            if (!yloc.isEmpty()) args << "--yloc" << yloc;
+            handle_args(args);
+        } else {
+            handle_args(QStringList() << QCoreApplication::applicationFilePath() << file_or_url);
+        }
+    });
 
     // live reload the config files, no need to live reload on android because we are not changing config files anyway
 #ifndef SIOYEK_ANDROID

@@ -15,6 +15,7 @@ std::string normalize_arxiv_from_text(const std::string& text);
 
 // String utilities
 std::string url_encode(const std::string& value);
+std::string normalize_paper_title(const std::string& raw_title);
 std::string sanitize_for_filename(const std::string& title);
 std::string normalize_title(const std::string& title);
 std::string to_lower(const std::string& s);

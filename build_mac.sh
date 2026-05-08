@@ -17,11 +17,16 @@ cd ..
 
 sed -Ei '' "s/QMAKE_MACOSX_DEPLOYMENT_TARGET.=.[0-9]+/QMAKE_MACOSX_DEPLOYMENT_TARGET = $(sw_vers -productVersion | cut -d. -f1)/" pdf_viewer_build_config.pro
 
+QMAKE=${QMAKE:-$HOME/Qt/6.8.2/macos/bin/qmake}
+
 if [[ $1 == portable ]]; then
-	qmake pdf_viewer_build_config.pro
+	"$QMAKE" pdf_viewer_build_config.pro
 else
-	qmake "CONFIG+=non_portable" pdf_viewer_build_config.pro
+	"$QMAKE" "CONFIG+=non_portable" pdf_viewer_build_config.pro
 fi
+
+# AGL framework was removed in macOS 26; strip it from Qt's generated Makefile
+sed -i '' 's/ -framework AGL//g' Makefile
 
 make -j$MAKE_PARALLEL
 

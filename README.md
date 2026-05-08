@@ -43,12 +43,13 @@ curl -v -F "input=@/path/to/my/pdf.pdf" http://localhost:8070/api/processReferen
 ```bash
 curl -v -F "input=@/path/to/my/pdf.pdf" http://localhost:8070/api/processHeaderDocument
 ```
-
+w   rnvPWNV[qeonv[wEN VP;k v
+vweD]]
 
 
 ### install QT
 ```bash
-brew uninstall qt
+# brew uninstall qt
 python3 -m venv myenv
 source myenv/bin/activate
 pip install aqtinstall
@@ -66,16 +67,17 @@ export Qt6_DIR=~/Qt/6.8.2/macos/
 export QT_PLUGIN_PATH=~/Qt/6.8.2/macos/plugins
 export PKG_CONFIG_PATH=~/Qt/6.8.2/macos/lib/pkgconfig
 export QML2_IMPORT_PATH=~/Qt/6.8.2/macos/qml
-export PATH="~/Qt/6.8.2/macos/bin:$PATH"
+export PATH="$HOME/Qt/6.8.2/macos/bin:$PATH"
 chmod +x build_mac.sh
-setopt PIPE_FAIL PRINT_EXIT_VALUE ERR_RETURN SOURCE_TRACE XTRACE
 MAKE_PARALLEL=8 ./build_mac.sh
 rm -rf /Applications/sioyek.app
 mv build/sioyek.app /Applications/
 sudo -S codesign --force --sign - --deep /Applications/sioyek.app < ~/.sioyek_pass.txt
 ```
-
-
+testing
+oqefkjnvowenvpq2einvp2e
+testing
+testing
 running
 ```bash
 /Applications/sioyek.app/Contents/MacOS/sioyek

@@ -17,6 +17,7 @@
 #include <qjsondocument.h>
 #include <qdir.h>
 #include <qstandardpaths.h>
+#include <QUrl>
 #include <set>
 
 #include <mupdf/pdf.h>
@@ -643,12 +644,14 @@ MarkdownFile* Document::get_markdown_file(const std::string& paper_title) {
                 markdown_path = it->second.canonical_path.string();
             } else {
                 // Not found - create new file
-                std::string title = paper_title.empty() ? grobid_doc->get_title() : paper_title;
+                std::string title = normalize_paper_title(
+                    paper_title.empty() ? grobid_doc->get_title() : paper_title);
                 std::string safe_title;
                 if (!title.empty()) {
                     safe_title = sanitize_for_filename(title) + ".md";
                 } else {
-                    safe_title = fs::path(file_name).stem().string() + ".md";
+                    safe_title = sanitize_for_filename(
+                        normalize_paper_title(fs::path(file_name).stem().string())) + ".md";
                 }
 
                 fs::path md_path = safe_title;
@@ -766,7 +769,8 @@ void Document::add_highlight_to_markdown(const std::wstring& text,
     MarkdownFile* md = get_markdown_file();
     if (!md) return; // safety check
 
-    std::wstring link = L"[Back to Sioyek](sioyek://open?file=" + file_name +
+    QString encoded_file = QUrl::toPercentEncoding(QString::fromStdWString(file_name));
+    std::wstring link = L"[Back to Sioyek](sioyek://open?file=" + encoded_file.toStdWString() +
                         L"&page=" + std::to_wstring(page) +
                         L"&x=" + std::to_wstring((int)x) +
                         L"&y=" + std::to_wstring((int)y) +

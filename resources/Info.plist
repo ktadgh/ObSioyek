@@ -22,6 +22,17 @@
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sioyek</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>info.sioyek.sioyek</string>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
     <array>
         <dict>

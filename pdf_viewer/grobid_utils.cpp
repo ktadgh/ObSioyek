@@ -1,5 +1,7 @@
 // grobid_utils.cpp
 #include "grobid_utils.h"
+#include "vault.h"
+#include "markdown.h"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include <httplib.h>
@@ -15,6 +17,8 @@
 #include <iomanip>
 #include <regex>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <cctype>
 
@@ -90,6 +94,504 @@ std::string url_encode(const std::string& value) {
         }
     }
     return escaped.str();
+}
+
+/* ============================================================
+   Paper title normalisation
+   ============================================================ */
+
+static std::string norm_unicode_punct(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 4);
+    for (size_t i = 0; i < s.size(); ) {
+        auto b = [&](size_t j) -> unsigned char { return j < s.size() ? (unsigned char)s[j] : 0; };
+        if (b(i) == 0xE2 && b(i+1) == 0x80) {
+            switch (b(i+2)) {
+                case 0x93: out += '-';    i += 3; continue;  // en dash → -
+                case 0x94: out += " - "; i += 3; continue;  // em dash → " - "
+                case 0x98: case 0x99: out += '\''; i += 3; continue;  // smart single quotes
+                case 0x9C: case 0x9D: out += '"';  i += 3; continue;  // smart double quotes
+                case 0xA6: out += "..."; i += 3; continue;  // ellipsis
+                case 0xA2: out += '-';   i += 3; continue;  // bullet
+            }
+        }
+        if (b(i) == 0xC2 && b(i+1) == 0xA0) { out += ' '; i += 2; continue; }  // NBSP
+        out += s[i++];
+    }
+    return out;
+}
+
+static std::string title_case_word(const std::string& w) {
+    if (w.empty()) return w;
+    std::string r = w;
+    r[0] = (char)std::toupper((unsigned char)r[0]);
+    for (size_t i = 1; i < r.size(); ++i)
+        r[i] = (char)std::tolower((unsigned char)r[i]);
+    return r;
+}
+
+static std::string str_to_upper(const std::string& s) {
+    std::string r = s;
+    for (auto& c : r) c = (char)std::toupper((unsigned char)c);
+    return r;
+}
+
+static const std::unordered_map<std::string, std::string>& get_acronym_map() {
+    // Keys are the fully-uppercased, hyphen-stripped form of the word.
+    // Values are the canonical display casing.
+    static const std::unordered_map<std::string, std::string> m = {
+        // ── Transformer / language models ────────────────────────────────────
+        {"BERT",          "BERT"},
+        {"ROBERTA",       "RoBERTa"},
+        {"ALBERT",        "ALBERT"},
+        {"XLNET",         "XLNet"},
+        {"T5",            "T5"},
+        {"BART",          "BART"},
+        {"ELECTRA",       "ELECTRA"},
+        {"DEBERTA",       "DeBERTa"},
+        {"DISTILBERT",    "DistilBERT"},
+        {"SPANBERT",      "SpanBERT"},
+        {"BIOBERT",       "BioBERT"},
+        {"SCIBERT",       "SciBERT"},
+        {"CLINICALBERT",  "ClinicalBERT"},
+        {"LEGALBERT",     "LegalBERT"},
+        {"FINBERT",       "FinBERT"},
+        {"SBERT",         "SBERT"},
+        {"MPNET",         "MPNet"},
+        {"GPT",           "GPT"},
+        {"CHATGPT",       "ChatGPT"},
+        {"INSTRUCTGPT",   "InstructGPT"},
+        {"LLAMA",         "LLaMA"},
+        {"LLAMA2",        "LLaMA-2"},
+        {"LLAMA3",        "LLaMA-3"},
+        {"LLAVA",         "LLaVA"},
+        {"MINIGPT4",      "MiniGPT-4"},
+        {"ALPACA",        "Alpaca"},
+        {"VICUNA",        "Vicuna"},
+        {"MISTRAL",       "Mistral"},
+        {"MIXTRAL",       "Mixtral"},
+        {"FALCON",        "Falcon"},
+        {"PALM",          "PaLM"},
+        {"PALM2",         "PaLM-2"},
+        {"GEMMA",         "Gemma"},
+        {"GEMINI",        "Gemini"},
+        {"CLAUDE",        "Claude"},
+        {"CHINCHILLA",    "Chinchilla"},
+        {"GOPHER",        "Gopher"},
+        {"BLOOM",         "BLOOM"},
+        {"OPT",           "OPT"},
+        {"FLAN",          "FLAN"},
+        {"ELMO",          "ELMo"},
+        {"PHI",           "Phi"},
+        {"QWEN",          "Qwen"},
+        {"RWKV",          "RWKV"},
+        {"MAMBA",         "Mamba"},
+        {"RETNET",        "RetNet"},
+        {"HYENA",         "Hyena"},
+        {"OPENLLAMA",     "OpenLLaMA"},
+        {"WORD2VEC",      "Word2Vec"},
+        {"FASTTEXT",      "fastText"},
+        {"GLOVE",         "GloVe"},
+        // ── Vision / multimodal ───────────────────────────────────────────────
+        {"VIT",           "ViT"},
+        {"DEIT",          "DeiT"},
+        {"BEIT",          "BEiT"},
+        {"MAE",           "MAE"},
+        {"DINO",          "DINO"},
+        {"DINOV2",        "DINOv2"},
+        {"IJEPA",         "I-JEPA"},
+        {"CLIP",          "CLIP"},
+        {"BLIP",          "BLIP"},
+        {"BLIP2",         "BLIP-2"},
+        {"ALIGN",         "ALIGN"},
+        {"DALLE",         "DALL-E"},
+        {"DALLE2",        "DALL-E 2"},
+        {"DALLE3",        "DALL-E 3"},
+        {"FLAMINGO",      "Flamingo"},
+        {"IMAGEBIND",     "ImageBind"},
+        {"IDEFICS",       "IDEFICS"},
+        // ── Diffusion / generative models ─────────────────────────────────────
+        {"DDPM",          "DDPM"},
+        {"DDIM",          "DDIM"},
+        {"SDXL",          "SDXL"},
+        {"VAE",           "VAE"},
+        {"CVAE",          "CVAE"},
+        {"VQVAE",         "VQ-VAE"},
+        {"GAN",           "GAN"},
+        {"DCGAN",         "DCGAN"},
+        {"WGAN",          "WGAN"},
+        {"CYCLEGAN",      "CycleGAN"},
+        {"STYLEGAN",      "StyleGAN"},
+        {"BIGGAN",        "BigGAN"},
+        {"VQGAN",         "VQGAN"},
+        {"STABLEDIFFUSION","Stable Diffusion"},
+        // ── Recurrent / CNN architectures ─────────────────────────────────────
+        {"LSTM",          "LSTM"},
+        {"GRU",           "GRU"},
+        {"RNN",           "RNN"},
+        {"BILSTM",        "BiLSTM"},
+        {"BIGRU",         "BiGRU"},
+        {"BRNN",          "BRNN"},
+        {"CNN",           "CNN"},
+        {"DCNN",          "DCNN"},
+        {"RESNET",        "ResNet"},
+        {"VGG",           "VGG"},
+        {"ALEXNET",       "AlexNet"},
+        {"EFFICIENTNET",  "EfficientNet"},
+        {"MOBILENET",     "MobileNet"},
+        {"DENSENET",      "DenseNet"},
+        {"SHUFFLENET",    "ShuffleNet"},
+        {"SQUEEZENET",    "SqueezeNet"},
+        {"UNET",          "U-Net"},
+        // ── Self-supervised / contrastive ─────────────────────────────────────
+        {"BYOL",          "BYOL"},
+        {"SIMCLR",        "SimCLR"},
+        {"MOCO",          "MoCo"},
+        {"SIMSIAM",       "SimSiam"},
+        {"SWAV",          "SwAV"},
+        // ── Efficiency / fine-tuning methods ──────────────────────────────────
+        {"LORA",          "LoRA"},
+        {"QLORA",         "QLoRA"},
+        {"PEFT",          "PEFT"},
+        {"BITFIT",        "BitFit"},
+        {"IA3",           "IA3"},
+        {"DAPT",          "DAPT"},
+        {"RLHF",          "RLHF"},
+        // ── RL / alignment ────────────────────────────────────────────────────
+        {"PPO",           "PPO"},
+        {"DPO",           "DPO"},
+        {"SFT",           "SFT"},
+        {"GRPO",          "GRPO"},
+        {"TRPO",          "TRPO"},
+        {"A3C",           "A3C"},
+        {"A2C",           "A2C"},
+        {"DQN",           "DQN"},
+        {"SAC",           "SAC"},
+        {"TD3",           "TD3"},
+        {"DDPG",          "DDPG"},
+        {"RAG",           "RAG"},
+        {"MOE",           "MoE"},
+        {"MOA",           "MoA"},
+        {"MDP",           "MDP"},
+        {"POMDP",         "POMDP"},
+        {"CMDP",          "CMDP"},
+        // ── Attention / architecture components ───────────────────────────────
+        {"MHA",           "MHA"},
+        {"GQA",           "GQA"},
+        {"MQA",           "MQA"},
+        {"MLA",           "MLA"},
+        {"FFN",           "FFN"},
+        {"MLP",           "MLP"},
+        {"COT",           "CoT"},
+        {"ICL",           "ICL"},
+        {"KV",            "KV"},
+        // ── Activation functions ──────────────────────────────────────────────
+        {"RELU",          "ReLU"},
+        {"GELU",          "GeLU"},
+        {"SILU",          "SiLU"},
+        {"ELU",           "ELU"},
+        {"PRELU",         "PReLU"},
+        {"LEAKYRELU",     "LeakyReLU"},
+        {"SWIGLU",        "SwiGLU"},
+        {"GEGLU",         "GeGLU"},
+        {"GLU",           "GLU"},
+        {"MISH",          "Mish"},
+        {"SWISH",         "Swish"},
+        // ── Normalisation ─────────────────────────────────────────────────────
+        {"RMSNORM",       "RMSNorm"},
+        {"LAYERNORM",     "LayerNorm"},
+        {"GROUPNORM",     "GroupNorm"},
+        {"BATCHNORM",     "BatchNorm"},
+        // ── Optimisers ────────────────────────────────────────────────────────
+        {"SGD",           "SGD"},
+        {"ADAM",          "Adam"},
+        {"ADAMW",         "AdamW"},
+        {"ADAGRAD",       "AdaGrad"},
+        {"ADADELTA",      "AdaDelta"},
+        {"RMSPROP",       "RMSProp"},
+        {"LAMB",          "LAMB"},
+        {"LARS",          "LARS"},
+        // ── Tokenisation ──────────────────────────────────────────────────────
+        {"BPE",           "BPE"},
+        {"WORDPIECE",     "WordPiece"},
+        {"SENTENCEPIECE", "SentencePiece"},
+        // ── NLP tasks / sub-fields ────────────────────────────────────────────
+        {"NLP",           "NLP"},
+        {"NLU",           "NLU"},
+        {"NLG",           "NLG"},
+        {"NER",           "NER"},
+        {"QA",            "QA"},
+        {"MRC",           "MRC"},
+        {"MT",            "MT"},
+        {"NMT",           "NMT"},
+        {"SMT",           "SMT"},
+        {"ASR",           "ASR"},
+        {"TTS",           "TTS"},
+        {"OCR",           "OCR"},
+        {"STT",           "STT"},
+        {"NLI",           "NLI"},
+        {"STS",           "STS"},
+        {"SNLI",          "SNLI"},
+        {"MNLI",          "MNLI"},
+        {"SRL",           "SRL"},
+        {"AMR",           "AMR"},
+        {"WSD",           "WSD"},
+        // ── CV tasks ──────────────────────────────────────────────────────────
+        {"VQA",           "VQA"},
+        {"DOCVQA",        "DocVQA"},
+        {"TEXTVQA",       "TextVQA"},
+        {"SCIENCEQA",     "ScienceQA"},
+        // ── XAI ───────────────────────────────────────────────────────────────
+        {"SHAP",          "SHAP"},
+        {"LIME",          "LIME"},
+        {"GRADCAM",       "Grad-CAM"},
+        // ── Metrics ───────────────────────────────────────────────────────────
+        {"BLEU",          "BLEU"},
+        {"ROUGE",         "ROUGE"},
+        {"METEOR",        "METEOR"},
+        {"CIDER",         "CIDEr"},
+        {"SPICE",         "SPICE"},
+        {"WER",           "WER"},
+        {"CER",           "CER"},
+        {"MRR",           "MRR"},
+        {"NDCG",          "NDCG"},
+        {"MAUVE",         "MAUVE"},
+        {"BERTSCORE",     "BERTScore"},
+        {"BLEURT",        "BLEURT"},
+        {"COMET",         "COMET"},
+        // ── Datasets / benchmarks ─────────────────────────────────────────────
+        {"IMAGENET",      "ImageNet"},
+        {"CIFAR",         "CIFAR"},
+        {"MNIST",         "MNIST"},
+        {"COCO",          "COCO"},
+        {"PASCAL",        "PASCAL"},
+        {"OPENIMAGES",    "OpenImages"},
+        {"SQUAD",         "SQuAD"},
+        {"COQA",          "CoQA"},
+        {"QUAC",          "QuAC"},
+        {"TRIVIAQA",      "TriviaQA"},
+        {"HOTPOTQA",      "HotpotQA"},
+        {"NATURALQA",     "NaturalQA"},
+        {"GLUE",          "GLUE"},
+        {"SUPERGLUE",     "SuperGLUE"},
+        {"MMLU",          "MMLU"},
+        {"HELLASWAG",     "HellaSwag"},
+        {"WINOGRANDE",    "WinoGrande"},
+        {"ARC",           "ARC"},
+        {"TRUTHFULQA",    "TruthfulQA"},
+        {"GSM8K",         "GSM8K"},
+        {"HUMANEVAL",     "HumanEval"},
+        {"MBPP",          "MBPP"},
+        {"WIKITEXT",      "WikiText"},
+        {"COMMONCRAWL",   "CommonCrawl"},
+        {"OPENWEBTEXT",   "OpenWebText"},
+        {"REDPAJAMA",     "RedPajama"},
+        {"DOLMA",         "Dolma"},
+        {"FINEWEB",       "FineWeb"},
+        // ── General AI/ML abbreviations ───────────────────────────────────────
+        {"AI",            "AI"},
+        {"ML",            "ML"},
+        {"DL",            "DL"},
+        {"AGI",           "AGI"},
+        {"LLM",           "LLM"},
+        {"SLM",           "SLM"},
+        {"VLM",           "VLM"},
+        {"MLLM",          "MLLM"},
+        // ── Hardware ──────────────────────────────────────────────────────────
+        {"CPU",           "CPU"},
+        {"GPU",           "GPU"},
+        {"TPU",           "TPU"},
+        {"NPU",           "NPU"},
+        {"FPGA",          "FPGA"},
+        {"ASIC",          "ASIC"},
+        {"SOC",           "SoC"},
+        {"CUDA",          "CUDA"},
+        {"OPENCL",        "OpenCL"},
+        {"OPENGL",        "OpenGL"},
+        {"DIRECTX",       "DirectX"},
+        {"MPI",           "MPI"},
+        {"SIMD",          "SIMD"},
+        {"AVX",           "AVX"},
+        {"SSE",           "SSE"},
+        {"VRAM",          "VRAM"},
+        {"DRAM",          "DRAM"},
+        // ── Systems / networking ──────────────────────────────────────────────
+        {"API",           "API"},
+        {"SDK",           "SDK"},
+        {"CLI",           "CLI"},
+        {"GUI",           "GUI"},
+        {"IDE",           "IDE"},
+        {"HTTP",          "HTTP"},
+        {"HTTPS",         "HTTPS"},
+        {"REST",          "REST"},
+        {"GRPC",          "gRPC"},
+        {"TCP",           "TCP"},
+        {"UDP",           "UDP"},
+        {"DNS",           "DNS"},
+        {"TLS",           "TLS"},
+        {"SSL",           "SSL"},
+        {"OAUTH",         "OAuth"},
+        {"JWT",           "JWT"},
+        {"SQL",           "SQL"},
+        {"NOSQL",         "NoSQL"},
+        {"JSON",          "JSON"},
+        {"XML",           "XML"},
+        {"YAML",          "YAML"},
+        {"HTML",          "HTML"},
+        {"CSS",           "CSS"},
+        {"PDF",           "PDF"},
+        {"DOI",           "DOI"},
+        {"URL",           "URL"},
+        {"URI",           "URI"},
+        {"OS",            "OS"},
+        {"JVM",           "JVM"},
+        {"JIT",           "JIT"},
+        {"LLVM",          "LLVM"},
+        {"GCC",           "GCC"},
+        // ── Frameworks / tools ────────────────────────────────────────────────
+        {"PYTORCH",       "PyTorch"},
+        {"TENSORFLOW",    "TensorFlow"},
+        {"JAX",           "JAX"},
+        {"NUMPY",         "NumPy"},
+        {"SCIPY",         "SciPy"},
+        {"OPENAI",        "OpenAI"},
+        {"DEEPMIND",      "DeepMind"},
+        {"GITHUB",        "GitHub"},
+        {"ARXIV",         "arXiv"},
+        {"GROBID",        "GROBID"},
+        // ── Quantisation / precision ──────────────────────────────────────────
+        {"INT8",          "INT8"},
+        {"INT4",          "INT4"},
+        {"FP16",          "FP16"},
+        {"FP32",          "FP32"},
+        {"BF16",          "BF16"},
+        {"GPTQ",          "GPTQ"},
+        {"AWQ",           "AWQ"},
+        // ── Languages / formats with non-standard casing ──────────────────────
+        {"JAVASCRIPT",    "JavaScript"},
+        {"TYPESCRIPT",    "TypeScript"},
+        {"WEBASSEMBLY",   "WebAssembly"},
+        {"WASM",          "WASM"},
+        {"MATLAB",        "MATLAB"},
+        {"LATEX",         "LaTeX"},
+        {"BIBTEX",        "BibTeX"},
+    };
+    return m;
+}
+
+// Determine casing for a single whitespace-delimited token (may contain hyphens).
+static std::string apply_word_casing(
+    const std::string& word,
+    bool force_cap,
+    const std::unordered_map<std::string, std::string>& amap,
+    const std::unordered_set<std::string>& small_words)
+{
+    if (word.empty()) return word;
+
+    // Peel leading and trailing non-alphanumeric, non-hyphen punctuation.
+    size_t ls = 0;
+    while (ls < word.size() && !std::isalnum((unsigned char)word[ls]) && word[ls] != '-')
+        ++ls;
+    size_t le = word.size();
+    while (le > ls && !std::isalnum((unsigned char)word[le-1]) && word[le-1] != '-')
+        --le;
+
+    if (ls >= le) return word;  // pure punctuation token
+
+    std::string lead  = word.substr(0, ls);
+    std::string core  = word.substr(ls, le - ls);
+    std::string trail = word.substr(le);
+
+    // Build lookup keys.
+    std::string key_full = str_to_upper(core);
+    std::string key_nodash;
+    for (char c : core) if (c != '-') key_nodash += (char)std::toupper((unsigned char)c);
+
+    // 1. Full token (hyphens included) in map — e.g. "DALL-E" stored as "DALLE".
+    {
+        auto it = amap.find(key_nodash);
+        if (it != amap.end()) return lead + it->second + trail;
+    }
+
+    // 2. Plural of a known acronym: strip trailing 's', look up root.
+    if (key_nodash.size() > 1 && key_nodash.back() == 'S') {
+        std::string singular = key_nodash.substr(0, key_nodash.size() - 1);
+        auto it = amap.find(singular);
+        if (it != amap.end()) return lead + it->second + "s" + trail;
+    }
+
+    // 3. Hyphenated compound: split, process each part, rejoin.
+    size_t dash = core.find('-');
+    if (dash != std::string::npos) {
+        std::string left  = apply_word_casing(core.substr(0, dash),  force_cap, amap, small_words);
+        std::string right = apply_word_casing(core.substr(dash + 1), true,      amap, small_words);
+        return lead + left + "-" + right + trail;
+    }
+
+    // 4. Small word (lower unless it is force-capitalised).
+    std::string lower_core;
+    for (char c : core) lower_core += (char)std::tolower((unsigned char)c);
+    if (!force_cap && small_words.count(lower_core))
+        return lead + lower_core + trail;
+
+    // 5. Default: Title Case.
+    return lead + title_case_word(core) + trail;
+}
+
+std::string normalize_paper_title(const std::string& raw) {
+    if (raw.empty()) return raw;
+
+    // Replace Unicode punctuation with plain ASCII equivalents.
+    std::string s = norm_unicode_punct(raw);
+
+    // Collapse whitespace and trim.
+    std::string collapsed;
+    collapsed.reserve(s.size());
+    bool prev_space = true;
+    for (unsigned char c : s) {
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            if (!prev_space) { collapsed += ' '; prev_space = true; }
+        } else {
+            collapsed += (char)c;
+            prev_space = false;
+        }
+    }
+    if (!collapsed.empty() && collapsed.back() == ' ') collapsed.pop_back();
+
+    // Strip trailing sentence-ending punctuation (.  :  ;).
+    while (!collapsed.empty() &&
+           (collapsed.back() == '.' || collapsed.back() == ':' || collapsed.back() == ';'))
+        collapsed.pop_back();
+    while (!collapsed.empty() && collapsed.back() == ' ') collapsed.pop_back();
+
+    if (collapsed.empty()) return raw;
+
+    static const std::unordered_set<std::string> small_words = {
+        "a", "an", "the",
+        "and", "but", "or", "nor", "for", "yet", "so",
+        "at", "by", "in", "of", "on", "to", "up", "as", "via", "per", "vs"
+    };
+    const auto& amap = get_acronym_map();
+
+    std::vector<std::string> tokens;
+    {
+        std::istringstream ss(collapsed);
+        std::string tok;
+        while (ss >> tok) tokens.push_back(tok);
+    }
+
+    std::string result;
+    bool force_next = true;  // always capitalise first word
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        if (i > 0) result += ' ';
+        const std::string& tok = tokens[i];
+        result += apply_word_casing(tok, force_next, amap, small_words);
+        // Capitalise the word following a colon or a standalone dash (from em-dash).
+        force_next = (!tok.empty() && tok.back() == ':') || tok == "-";
+    }
+
+    return result;
 }
 
 std::string sanitize_for_filename(const std::string& title) {
@@ -402,7 +904,7 @@ std::vector<std::string> extract_bibl_titles(const std::string& tei_xml) {
         if (analytic) {
             auto* title = analytic->FirstChildElement("title");
             if (title && title->GetText()) {
-                titles.push_back(title->GetText());
+                titles.push_back(normalize_paper_title(title->GetText()));
                 continue;
             }
         }
@@ -412,7 +914,7 @@ std::vector<std::string> extract_bibl_titles(const std::string& tei_xml) {
         if (monogr) {
             auto* title = monogr->FirstChildElement("title");
             if (title && title->GetText()) {
-                titles.push_back(title->GetText());
+                titles.push_back(normalize_paper_title(title->GetText()));
                 continue;
             }
         }
@@ -426,7 +928,7 @@ std::vector<std::string> extract_bibl_titles(const std::string& tei_xml) {
         }
         std::string s = text_content.str();
         if (!s.empty()) {
-            titles.push_back(s);
+            titles.push_back(normalize_paper_title(s));
         }
     }
 
@@ -500,7 +1002,7 @@ std::string get_paper_title_with_grobid(const std::string& pdf_path) {
     auto* title_el = titleStmt->FirstChildElement("title");
     if (!title_el || !title_el->GetText()) return "";
 
-    return title_el->GetText();
+    return normalize_paper_title(title_el->GetText());
 }
 
 void process_pdf_references_standalone(const std::string& pdf_path, const std::string& vault_config_path) {
@@ -515,7 +1017,7 @@ void process_pdf_references_standalone(const std::string& pdf_path, const std::s
     std::string paper_title = get_paper_title_with_grobid(pdf_path);
     if (paper_title.empty()) {
         std::cerr << "Could not extract paper title, using PDF filename instead\n";
-        paper_title = fs::path(pdf_path).stem().string();
+        paper_title = normalize_paper_title(fs::path(pdf_path).stem().string());
     }
     std::cout << "Title: " << paper_title << "\n";
 

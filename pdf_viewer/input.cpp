@@ -1407,28 +1407,41 @@ public:
 
         std::string pdf_path = QString::fromStdWString(state.document_path).toStdString();
 
-        QtConcurrent::run([doc, pdf_path]() {
-            parse_and_store_references_async(doc, pdf_path);
+        MainWidget* w = widget;
+        QtConcurrent::run([doc, pdf_path, w]() {
+            parse_and_store_references_async(doc, pdf_path, w);
         });
     }
 
 private:
-    static void parse_and_store_references_async(Document* doc, const std::string& pdf_path) {
+    static void set_status(MainWidget* w, const std::string& msg) {
+        if (!w) return;
+        std::wstring wmsg(msg.begin(), msg.end());
+        QMetaObject::invokeMethod(w, [w, wmsg]() {
+            w->set_status_message(wmsg);
+        }, Qt::QueuedConnection);
+    }
+
+    static void parse_and_store_references_async(Document* doc, const std::string& pdf_path, MainWidget* w) {
         if (!doc || pdf_path.empty() || !fs::exists(pdf_path)) {
-            std::cerr << "Invalid document or PDF path\n";
+            set_status(w, "Parse references: invalid document path");
             return;
         }
-        
+
+        set_status(w, "Parse references: extracting title...");
         std::string paper_title = get_paper_title_with_grobid(pdf_path);
         if (paper_title.empty()) {
-            std::cerr << "Could not extract paper title, using PDF filename instead\n";
             paper_title = fs::path(pdf_path).stem().string();
         }
 
+        set_status(w, "Parse references: looking up DOI for \"" + paper_title + "\"...");
         std::string doi = query_arxiv_for_doi(paper_title);
         if (doi.empty()) doi = query_crossref_for_doi(paper_title);
 
+        set_status(w, "Parse references: extracting references...");
         std::vector<std::string> references = extract_pdf_references_with_grobid(pdf_path);
+
+        set_status(w, "Parse references: looking up " + std::to_string(references.size()) + " DOIs...");
         std::vector<std::string> reference_dois;
         for (const auto& ref : references) {
             std::string ref_doi = normalize_arxiv_from_text(ref);
@@ -1439,7 +1452,7 @@ private:
 
         MarkdownFile* md = doc->get_markdown_file(paper_title);
         if (!md) {
-            std::cerr << "Failed to create markdown file\n";
+            set_status(w, "Parse references: failed to create markdown file");
             return;
         }
 
@@ -1447,8 +1460,9 @@ private:
         if (!doi.empty()) md->add_alias(doi);
 
         md->add_references(references, reference_dois);
-
         md->save();
+
+        set_status(w, "Parse references: done (" + std::to_string(references.size()) + " references)");
     }
 
     static std::vector<std::string> extract_pdf_references_with_grobid(const std::string& pdf_path) {
