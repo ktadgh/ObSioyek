@@ -768,7 +768,8 @@ std::string query_crossref_for_doi(const std::string& title) {
     if (title.empty()) return "";
 
     httplib::SSLClient cli("api.crossref.org");
-    cli.set_read_timeout(10, 0);
+    cli.set_connection_timeout(5, 0);
+    cli.set_read_timeout(5, 0);
 
     std::string url = "/works?query.title=" + url_encode(title) +
                       "&rows=1&mailto=you@example.com";
@@ -814,7 +815,8 @@ std::string query_arxiv_for_doi(const std::string& title) {
     std::string url = "/api/query?search_query=" + encoded_query + "&max_results=5";
 
     httplib::SSLClient cli("export.arxiv.org", 443);
-    cli.set_read_timeout(10, 0);
+    cli.set_connection_timeout(5, 0);
+    cli.set_read_timeout(5, 0);
     auto res = cli.Get(url.c_str());
     if (!res || res->status != 200) return "";
 

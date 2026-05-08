@@ -1,5 +1,6 @@
 #include <QtCore/qcontainerfwd.h>
 #include <cstdlib>
+#include <future>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -1442,12 +1443,20 @@ private:
         std::vector<std::string> references = extract_pdf_references_with_grobid(pdf_path);
 
         set_status(w, "Parse references: looking up " + std::to_string(references.size()) + " DOIs...");
-        std::vector<std::string> reference_dois;
+        std::vector<std::future<std::string>> doi_futures;
+        doi_futures.reserve(references.size());
         for (const auto& ref : references) {
-            std::string ref_doi = normalize_arxiv_from_text(ref);
-            if (ref_doi.empty()) ref_doi = query_arxiv_for_doi(ref);
-            if (ref_doi.empty()) ref_doi = query_crossref_for_doi(ref);
-            reference_dois.push_back(ref_doi);
+            doi_futures.push_back(std::async(std::launch::async, [ref]() -> std::string {
+                std::string doi = normalize_arxiv_from_text(ref);
+                if (doi.empty()) doi = query_arxiv_for_doi(ref);
+                if (doi.empty()) doi = query_crossref_for_doi(ref);
+                return doi;
+            }));
+        }
+        std::vector<std::string> reference_dois;
+        reference_dois.reserve(references.size());
+        for (auto& f : doi_futures) {
+            reference_dois.push_back(f.get());
         }
 
         MarkdownFile* md = doc->get_markdown_file(paper_title);

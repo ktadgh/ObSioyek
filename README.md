@@ -74,11 +74,8 @@ rm -rf /Applications/sioyek.app
 mv build/sioyek.app /Applications/
 sudo -S codesign --force --sign - --deep /Applications/sioyek.app < ~/.sioyek_pass.txt
 ```
-testing
-oqefkjnvowenvpq2einvp2e
-testing
-testing
-running
+
+
 ```bash
 /Applications/sioyek.app/Contents/MacOS/sioyek
 ```
